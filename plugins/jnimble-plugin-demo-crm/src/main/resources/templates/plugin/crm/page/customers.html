@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{crm.customer.title}">CRM 客户</title>
+  <link rel="stylesheet" th:href="@{/assets/plugins/{pluginId}/crm.css(pluginId=${pluginId})}">
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{crm.customer.title}">CRM 客户</h1>
+
+  <main layout:fragment="content">
+    <section class="admin-page-section">
+      <div class="admin-page-section__header">
+        <div>
+          <p class="admin-shell__eyebrow">CRM</p>
+          <h2 th:text="#{crm.customer.list}">客户列表</h2>
+        </div>
+      </div>
+      <div class="admin-dashboard-grid crm-summary-grid">
+        <article class="admin-card">
+          <span class="admin-card__label" th:text="#{crm.summary.accounts}">Accounts</span>
+          <strong>2</strong>
+          <p th:text="#{crm.summary.accounts.help}">Current customer accounts</p>
+        </article>
+        <article class="admin-card">
+          <span class="admin-card__label" th:text="#{crm.summary.active}">Active</span>
+          <strong>2</strong>
+          <p th:text="#{crm.summary.active.help}">Customers ready for follow-up</p>
+        </article>
+        <article class="admin-card">
+          <span class="admin-card__label" th:text="#{crm.summary.plugin}">Plugin</span>
+          <strong class="admin-code" th:text="${pluginId}">crm</strong>
+          <p th:text="#{crm.summary.plugin.help}">Provided by the plugin runtime</p>
+        </article>
+      </div>
+
+      <section class="admin-panel crm-customer-panel">
+        <div class="admin-panel__header">
+          <h2 th:text="#{crm.customer.accounts}">Customer Accounts</h2>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+            <tr>
+              <th th:text="#{crm.customer.name}">客户名称</th>
+              <th th:text="#{crm.customer.contact}">联系人</th>
+              <th th:text="#{crm.customer.status}">状态</th>
+              <th th:text="#{crm.customer.plugin}">插件</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr>
+              <td>Acme Manufacturing</td>
+              <td>alice.chen@example.com</td>
+              <td><span class="admin-status">ACTIVE</span></td>
+              <td class="admin-code" th:text="${pluginId}">crm</td>
+            </tr>
+            <tr>
+              <td>Northwind Trading</td>
+              <td>bob.li@example.com</td>
+              <td><span class="admin-status">ACTIVE</span></td>
+              <td class="admin-code" th:text="${pluginId}">crm</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

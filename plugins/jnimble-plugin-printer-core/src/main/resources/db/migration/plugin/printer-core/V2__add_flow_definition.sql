@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS prn_flow_definition (
+    id          VARCHAR(64) NOT NULL PRIMARY KEY COMMENT 'Flow definition ID',
+    flow_xml    LONGTEXT    NOT NULL COMMENT 'BPMN XML definition',
+    created_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT 'Printer BPMN flow definition';

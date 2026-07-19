@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0",
+  "id": "printer-core",
+  "name": "Printer Core Plugin",
+  "nameKey": "plugin.printer-core.name",
+  "description": "Core printing dispatch layer with PrinterDriver SPI and bpmn-js flow configuration",
+  "descriptionKey": "plugin.printer-core.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.printer.PrinterCorePluginBoot",
+  "spring": {
+    "configurationClass": "com.jnimble.plugin.printer.PrinterCorePluginConfiguration"
+  },
+  "dependencies": [
+    {
+      "pluginId": "order-core",
+      "version": "1.x",
+      "required": true
+    }
+  ],
+  "i18n": {
+    "basename": "i18n/messages"
+  },
+  "admin": {
+    "entry": "/printers",
+    "labelKey": "printer-core.printers.title",
+    "permission": "printer-core.config"
+  },
+  "permissions": [
+    {
+      "code": "printer-core.config",
+      "name": "Configure printers",
+      "nameKey": "permission.printer-core.config"
+    },
+    {
+      "code": "printer-core.driver",
+      "name": "Manage printer drivers",
+      "nameKey": "permission.printer-core.driver"
+    },
+    {
+      "code": "printer-core.view",
+      "name": "View print jobs",
+      "nameKey": "permission.printer-core.view"
+    },
+    {
+      "code": "printer-core.retry",
+      "name": "Retry failed print jobs",
+      "nameKey": "permission.printer-core.retry"
+    }
+  ],
+  "migration": {
+    "enabled": true,
+    "location": "classpath:db/migration/plugin/printer-core",
+    "table": "flyway_schema_history_printer_core",
+    "baselineOnMigrate": true,
+    "failOnError": true
+  }
+}

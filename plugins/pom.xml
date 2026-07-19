@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.jnimble</groupId>
+        <artifactId>jnimble-parent</artifactId>
+        <version>0.1.0-SNAPSHOT</version>
+        <relativePath>../jnimble-framework/pom.xml</relativePath>
+    </parent>
+
+    <artifactId>jnimble-plugins</artifactId>
+    <packaging>pom</packaging>
+    <name>JNimble Business Plugins</name>
+
+    <modules>
+        <module>jnimble-plugin-demo-crm</module>
+        <module>jnimble-plugin-license-issuer</module>
+        <module>jnimble-plugin-menu-manager</module>
+        <module>jnimble-plugin-order-core</module>
+        <module>jnimble-plugin-order-table</module>
+        <module>jnimble-plugin-payment</module>
+        <module>jnimble-plugin-printer-core</module>
+        <module>jnimble-plugin-printer-feie</module>
+    </modules>
+
+    <!--
+        本仓库内部模块互引的版本统一在此声明,便于一处修改。
+        jnimble-plugin-* 和 jnimble-license-sdk 都跟随本仓库 0.1.0-SNAPSHOT。
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-license-sdk</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-demo-crm</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-license-issuer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-menu-manager</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-order-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-order-table</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-payment</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-printer-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-printer-feie</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{printer-core.jobs.title}">Print Job Queue</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+  <style>
+    [v-cloak] { display: none; }
+    .app-jobs { padding: 20px; }
+    .app-jobs .el-table { margin-top: 16px; }
+    .app-jobs .filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+<h1 layout:fragment="page-title" th:text="#{printer-core.jobs.title}">Print Job Queue</h1>
+<main layout:fragment="content">
+  <div id="app-jobs" class="app-jobs" v-cloak>
+    <div class="filter-bar">
+      <el-select v-model="filter.status" placeholder="Status" clearable @change="fetchJobs" th:attr="placeholder=#{printer-core.jobs.status}">
+        <el-option label="Pending" value="PENDING" th:attr="label=#{printer-core.job.status.PENDING}"></el-option>
+        <el-option label="Printing" value="PRINTING" th:attr="label=#{printer-core.job.status.PRINTING}"></el-option>
+        <el-option label="Completed" value="COMPLETED" th:attr="label=#{printer-core.job.status.COMPLETED}"></el-option>
+        <el-option label="Failed" value="FAILED" th:attr="label=#{printer-core.job.status.FAILED}"></el-option>
+        <el-option label="Cancelled" value="CANCELLED" th:attr="label=#{printer-core.job.status.CANCELLED}"></el-option>
+      </el-select>
+      <el-button type="primary" style="margin-left:auto" @click="fetchJobs" th:text="#{printer-core.common.search}">Search</el-button>
+    </div>
+
+    <el-table :data="jobs" border stripe style="width:100%">
+      <el-table-column prop="orderId" label="Order ID" width="160" th:attr="label=#{printer-core.jobs.order}"></el-table-column>
+      <el-table-column prop="printerId" label="Printer" width="120" th:attr="label=#{printer-core.jobs.printer}"></el-table-column>
+      <el-table-column prop="nodeName" label="Node" width="120" th:attr="label=#{printer-core.jobs.node}"></el-table-column>
+      <el-table-column prop="type" label="Type" width="90" align="center" th:attr="label=#{printer-core.jobs.type}">
+        <template slot-scope="scope">
+          <el-tag size="small">{{ scope.row.type }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="Status" width="100" align="center" th:attr="label=#{printer-core.jobs.status}">
+        <template slot-scope="scope">
+          <el-tag :type="statusType(scope.row.status)" size="small">{{ statusLabel(scope.row.status) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="retryCount" label="Retries" width="80" align="center" th:attr="label=#{printer-core.jobs.retryCount}"></el-table-column>
+      <el-table-column prop="errorMessage" label="Error" min-width="160" th:attr="label=#{printer-core.jobs.error}">
+        <template slot-scope="scope">{{ scope.row.errorMessage || '-' }}</template>
+      </el-table-column>
+      <el-table-column label="Created" width="160" th:attr="label=#{printer-core.jobs.created}">
+        <template slot-scope="scope">{{ scope.row.createdAt || '-' }}</template>
+      </el-table-column>
+      <el-table-column label="Actions" width="100" align="center" th:attr="label=#{printer-core.common.actions}">
+        <template slot-scope="scope">
+          <el-button size="mini" type="primary" plain
+                     v-if="scope.row.status === 'FAILED'"
+                     @click="handleRetry(scope.row)" th:text="#{printer-core.jobs.retry}">Retry</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+  <th:block th:replace="~{fragment/element-locale :: scripts}" />
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script th:inline="javascript">
+    var csrfToken = /*[[${_csrf.token}]]*/ '';
+    var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    axios.defaults.baseURL = '/admin/plugins/printer-core';
+    axios.defaults.headers.common[csrfHeader] = csrfToken;
+
+    new Vue({
+      el: '#app-jobs',
+      data: {
+        i18n: {
+          pending: /*[[#{printer-core.job.status.PENDING}]]*/ 'Pending',
+          printing: /*[[#{printer-core.job.status.PRINTING}]]*/ 'Printing',
+          completed: /*[[#{printer-core.job.status.COMPLETED}]]*/ 'Completed',
+          failed: /*[[#{printer-core.job.status.FAILED}]]*/ 'Failed',
+          cancelled: /*[[#{printer-core.job.status.CANCELLED}]]*/ 'Cancelled',
+          resubmitted: /*[[#{printer-core.jobs.resubmitted}]]*/ 'Job resubmitted',
+          operationFailed: /*[[#{printer-core.common.operationFailed}]]*/ 'Operation failed'
+        },
+        jobs: [],
+        filter: { status: null }
+      },
+      mounted: function () { this.fetchJobs(); },
+      methods: {
+        fetchJobs: function () {
+          var self = this;
+          var params = {};
+          if (this.filter.status) params.status = this.filter.status;
+          axios.get('/jobs/list', { params: params }).then(function (r) { self.jobs = r.data; });
+        },
+        statusLabel: function (s) {
+          var map = { PENDING: this.i18n.pending, PRINTING: this.i18n.printing, COMPLETED: this.i18n.completed, FAILED: this.i18n.failed, CANCELLED: this.i18n.cancelled };
+          return map[s] || s;
+        },
+        statusType: function (s) {
+          var map = { PENDING: 'info', PRINTING: 'warning', COMPLETED: 'success', FAILED: 'danger', CANCELLED: 'info' };
+          return map[s] || 'info';
+        },
+        handleRetry: function (row) {
+          var self = this;
+          axios.post('/jobs/' + row.id + '/retry').then(function (r) {
+            if (r.data.success) { self.$message.success(self.i18n.resubmitted); self.fetchJobs(); }
+          }).catch(function () { self.$message.error(self.i18n.operationFailed); });
+        }
+      }
+    });
+  </script>
+</main>
+</html>

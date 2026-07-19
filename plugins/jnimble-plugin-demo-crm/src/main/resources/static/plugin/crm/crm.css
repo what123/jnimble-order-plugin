@@ -1,0 +1,7 @@
+.crm-customer-panel {
+  border-color: #c7d8d1;
+}
+
+.crm-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}

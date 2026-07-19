@@ -1,0 +1,31 @@
+.payment-diagnostic-meta dl {
+  display: grid;
+  grid-template-columns: minmax(120px, 180px) 1fr;
+  gap: 0.75rem 1rem;
+  margin: 0;
+}
+
+.payment-diagnostic-meta dt {
+  font-weight: 600;
+}
+
+.payment-diagnostic-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.payment-diagnostic-snapshot {
+  margin-top: 1rem;
+}
+
+.payment-diagnostic-snapshot pre {
+  margin: 0;
+  padding: 1rem;
+  max-height: 32rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 0.5rem;
+  background: #111827;
+  color: #e5e7eb;
+}

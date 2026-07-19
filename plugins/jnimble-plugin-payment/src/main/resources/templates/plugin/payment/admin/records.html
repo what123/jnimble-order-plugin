@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{payment.records.title}">收银记录</title>
+  <link rel="stylesheet" th:href="@{/assets/plugins/{pluginId}/payment.css(pluginId=${pluginId})}">
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{payment.records.title}">收银记录</h1>
+
+  <main layout:fragment="content">
+    <section class="admin-page-section">
+      <div class="admin-page-section__header">
+        <div>
+          <p class="admin-shell__eyebrow" th:text="#{plugin.payment.name}">收银</p>
+          <h2 th:text="#{payment.records.list}">收银记录列表</h2>
+        </div>
+      </div>
+
+      <section class="admin-panel">
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead>
+            <tr>
+              <th th:text="#{payment.records.order}">订单</th>
+              <th th:text="#{payment.records.method}">支付方式</th>
+              <th th:text="#{payment.records.amount}">金额</th>
+              <th th:text="#{payment.records.received}">收款金额</th>
+              <th th:text="#{payment.records.change}">找零</th>
+              <th th:text="#{payment.records.status}">状态</th>
+              <th th:text="#{payment.records.operator}">操作员</th>
+              <th th:text="#{payment.records.time}">时间</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${records}">
+              <td class="admin-code" th:text="${r.orderId}">ORD001</td>
+              <td th:text="${r.method}">CASH</td>
+              <td th:text="${r.amount}">0.00</td>
+              <td th:text="${r.receivedAmount}">0.00</td>
+              <td th:text="${r.changeAmount}">0.00</td>
+              <td><span class="admin-status" th:text="${r.status}">PAID</span></td>
+              <td th:text="${r.operator}">admin</td>
+              <td th:text="${r.paidAt}">2025-01-01</td>
+            </tr>
+            <tr th:if="${#lists.isEmpty(records)}">
+              <td colspan="8" class="admin-empty" th:text="#{payment.records.empty}">No payment records</td>
+            </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

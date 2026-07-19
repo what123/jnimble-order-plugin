@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1.0",
+  "id": "order-core",
+  "name": "Order Core Plugin",
+  "nameKey": "plugin.order-core.name",
+  "description": "Core order management plugin",
+  "descriptionKey": "plugin.order-core.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.order.OrderPluginBoot",
+  "spring": {
+    "configurationClass": "com.jnimble.plugin.order.OrderCorePluginConfiguration"
+  },
+  "i18n": {
+    "basename": "i18n/messages"
+  },
+  "admin": {
+    "entry": "/orders",
+    "labelKey": "order.admin.title",
+    "permission": "order-core.admin.view"
+  },
+  "permissions": [
+    {
+      "code": "order-core.admin.view",
+      "name": "View order admin",
+      "nameKey": "permission.order-core.admin.view"
+    },
+    {
+      "code": "order-core.kitchen.view",
+      "name": "View kitchen queue",
+      "nameKey": "permission.order-core.kitchen.view"
+    },
+    {
+      "code": "order-core.kitchen.operate",
+      "name": "Operate kitchen queue",
+      "nameKey": "permission.order-core.kitchen.operate"
+    },
+    {
+      "code": "order-core.kitchen.print",
+      "name": "Print kitchen tickets",
+      "nameKey": "permission.order-core.kitchen.print"
+    }
+  ],
+  "migration": {
+    "enabled": true,
+    "location": "classpath:db/migration/plugin/order-core",
+    "table": "flyway_schema_history_order_core",
+    "baselineOnMigrate": true,
+    "failOnError": true
+  }
+}

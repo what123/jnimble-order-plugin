@@ -1,0 +1,72 @@
+diff --git a/jnimble-starter/pom.xml b/jnimble-starter/pom.xml
+index c8f2249..81b873b 100644
+--- a/jnimble-starter/pom.xml
++++ b/jnimble-starter/pom.xml
+@@ -58,6 +58,54 @@
+             <artifactId>h2</artifactId>
+             <scope>test</scope>
+         </dependency>
++
++        <!--
++            开发期:把业务插件作为 classpath 依赖引入,starter 启动后由
++            ClasspathPluginInitializer 自动发现 META-INF/jnimble-plugin.json
++            并安装。配合 application.yml 的 jnimble.plugins.dev-classpath-enabled=true
++            即可"clone 即可开发",无需打 JAR、无需拷贝到 data/plugins。
++            正式打包/部署时请移除以下依赖,改用 data/plugins 目录方式部署。
++        -->
++        <dependency>
++            <groupId>com.jnimble</groupId>
++            <artifactId>jnimble-plugin-demo-crm</artifactId>
++            <version>${project.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>com.jnimble</groupId>
++            <artifactId>jnimble-plugin-license-issuer</artifactId>
++            <version>${project.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>com.jnimble</groupId>
++            <artifactId>jnimble-plugin-menu-manager</artifactId>
++            <version>${project.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>com.jnimble</groupId>
++            <artifactId>jnimble-plugin-order-core</artifactId>
++            <version>${project.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>com.jnimble</groupId>
++            <artifactId>jnimble-plugin-order-table</artifactId>
++            <version>${project.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>com.jnimble</groupId>
++            <artifactId>jnimble-plugin-payment</artifactId>
++            <version>${project.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>com.jnimble</groupId>
++            <artifactId>jnimble-plugin-printer-core</artifactId>
++            <version>${project.version}</version>
++        </dependency>
++        <dependency>
++            <groupId>com.jnimble</groupId>
++            <artifactId>jnimble-plugin-printer-feie</artifactId>
++            <version>${project.version}</version>
++        </dependency>
+     </dependencies>
+ 
+     <build>
+diff --git a/jnimble-starter/src/main/resources/application.yml b/jnimble-starter/src/main/resources/application.yml
+index 86acbdf..cac851c 100644
+--- a/jnimble-starter/src/main/resources/application.yml
++++ b/jnimble-starter/src/main/resources/application.yml
+@@ -38,7 +38,7 @@ jnimble:
+     platform-version: 0.1.0
+     configuration:
+       key-file: ${JNIMBLE_PLUGIN_CONFIG_KEY_FILE:./data/plugin-config.key}
+-    dev-classpath-enabled: ${JNIMBLE_DEV_CLASSPATH_ENABLED:false}
++    dev-classpath-enabled: ${JNIMBLE_DEV_CLASSPATH_ENABLED:true}
+     restore-enabled: true
+     directory-scan-enabled: true
+     directory-watch-enabled: true

@@ -1,0 +1,13 @@
+<span class="admin-shell__nav-label" th:text="#{admin.layout.section.menu}">桌号菜品</span>
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'plugin:' + pluginId + ':categories'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/{pluginId}/categories(pluginId=${pluginId})}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{menu.category.manage}">菜品分类</span>
+</a>
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'plugin:' + pluginId + ':items'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/{pluginId}/items(pluginId=${pluginId})}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{menu.item.manage}">菜品管理</span>
+</a>

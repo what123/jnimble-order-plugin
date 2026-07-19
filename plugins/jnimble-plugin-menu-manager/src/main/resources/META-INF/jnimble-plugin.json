@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "id": "menu-manager",
+  "name": "Menu Manager Plugin",
+  "nameKey": "plugin.menu-manager.name",
+  "description": "Menu and category management plugin",
+  "descriptionKey": "plugin.menu-manager.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.menu.MenuPluginBoot",
+  "spring": {
+    "configurationClass": "com.jnimble.plugin.menu.MenuManagerPluginConfiguration"
+  },
+  "i18n": {
+    "basename": "i18n/messages"
+  },
+  "admin": {
+    "entry": "/items",
+    "labelKey": "menu.item.manage",
+    "permission": "menu-manager.admin.view"
+  },
+  "permissions": [
+    {
+      "code": "menu-manager.admin.view",
+      "name": "View menu management",
+      "nameKey": "permission.menu-manager.admin.view"
+    },
+    {
+      "code": "menu-manager.category.manage",
+      "name": "Manage categories",
+      "nameKey": "permission.menu-manager.category.manage"
+    },
+    {
+      "code": "menu-manager.item.manage",
+      "name": "Manage menu items",
+      "nameKey": "permission.menu-manager.item.manage"
+    }
+  ],
+  "migration": {
+    "enabled": true,
+    "location": "classpath:db/migration/plugin/menu-manager",
+    "table": "flyway_schema_history_menu_manager",
+    "baselineOnMigrate": true,
+    "failOnError": true
+  }
+}

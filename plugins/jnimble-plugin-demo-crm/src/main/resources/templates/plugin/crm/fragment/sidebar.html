@@ -1,0 +1,7 @@
+<span class="admin-shell__nav-label" th:text="#{admin.layout.section.customers}">客户管理</span>
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'plugin:' + pluginId + ':customers'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/{pluginId}/customers(pluginId=${pluginId})}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{plugin.crm.name}">Customers</span>
+</a>

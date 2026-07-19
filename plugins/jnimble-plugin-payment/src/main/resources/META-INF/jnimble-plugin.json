@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "1.0",
+  "id": "payment",
+  "name": "Payment Plugin",
+  "nameKey": "plugin.payment.name",
+  "description": "Payment and cash register plugin",
+  "descriptionKey": "plugin.payment.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.payment.PaymentPluginBoot",
+  "spring": {
+    "configurationClass": "com.jnimble.plugin.payment.PaymentPluginConfiguration"
+  },
+  "dependencies": [
+    {
+      "pluginId": "order-core",
+      "version": "1.x",
+      "required": true
+    }
+  ],
+  "i18n": {
+    "basename": "i18n/messages"
+  },
+  "configuration": {
+    "title": "Payment Settings",
+    "titleKey": "payment.configuration.title",
+    "description": "Basic connection parameters used by payment providers.",
+    "descriptionKey": "payment.configuration.description",
+    "fields": [
+      {
+        "key": "merchantId",
+        "label": "Merchant ID",
+        "labelKey": "payment.configuration.merchantId",
+        "description": "Merchant identifier assigned by the payment provider.",
+        "descriptionKey": "payment.configuration.merchantIdHelp",
+        "placeholder": "Enter merchant ID",
+        "placeholderKey": "payment.configuration.merchantIdPlaceholder",
+        "type": "TEXT",
+        "required": false
+      },
+      {
+        "key": "apiKey",
+        "label": "API Secret",
+        "labelKey": "payment.configuration.apiKey",
+        "description": "Secret used to sign provider requests. It is encrypted at rest.",
+        "descriptionKey": "payment.configuration.apiKeyHelp",
+        "placeholder": "Enter API secret",
+        "placeholderKey": "payment.configuration.apiKeyPlaceholder",
+        "type": "SECRET",
+        "required": false
+      },
+      {
+        "key": "gatewayUrl",
+        "label": "Gateway URL",
+        "labelKey": "payment.configuration.gatewayUrl",
+        "placeholder": "https://api.payment.example",
+        "type": "TEXT",
+        "required": false
+      },
+      {
+        "key": "sandbox",
+        "label": "Sandbox mode",
+        "labelKey": "payment.configuration.sandbox",
+        "description": "Use the payment provider's sandbox environment.",
+        "descriptionKey": "payment.configuration.sandboxHelp",
+        "type": "BOOLEAN",
+        "required": false,
+        "defaultValue": "false"
+      }
+    ]
+  },
+  "admin": {
+    "entry": "/records",
+    "labelKey": "payment.records.title",
+    "permission": "payment.view"
+  },
+  "permissions": [
+    {
+      "code": "payment.cash",
+      "name": "Cash payment",
+      "nameKey": "permission.payment.cash"
+    },
+    {
+      "code": "payment.mobile",
+      "name": "Mobile payment",
+      "nameKey": "permission.payment.mobile"
+    },
+    {
+      "code": "payment.refund",
+      "name": "Refund",
+      "nameKey": "permission.payment.refund"
+    },
+    {
+      "code": "payment.view",
+      "name": "View payment records",
+      "nameKey": "permission.payment.view"
+    }
+  ],
+  "migration": {
+    "enabled": true,
+    "location": "classpath:db/migration/plugin/payment",
+    "table": "flyway_schema_history_payment",
+    "baselineOnMigrate": true,
+    "failOnError": true
+  }
+}

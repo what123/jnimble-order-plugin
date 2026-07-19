@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="zh-CN" th:lang="${#locale.toLanguageTag()}" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="#{kitchen.title}">Kitchen Production</title>
+    <link rel="stylesheet" th:href="@{/assets/system/css/admin-shell.css}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+    <style>
+        [v-cloak] { display: none; }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #f5f7fa; color: #1f2933; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        .kitchen-workbench__header { min-height: 64px; display: flex; align-items: center; gap: 20px; padding: 10px 20px; background: #172b4d; color: #fff; }
+        .kitchen-workbench__brand { display: flex; align-items: center; gap: 12px; color: inherit; text-decoration: none; }
+        .kitchen-workbench__mark { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 8px; background: #409eff; font-size: 20px; font-weight: 800; }
+        .kitchen-workbench__title { font-size: 18px; font-weight: 700; }
+        .kitchen-workbench__actions { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+        .kitchen-app { min-height: calc(100vh - 64px); background: #f5f7fa; color: #1f2933; }
+        .kitchen-toolbar { display: flex; align-items: center; gap: 16px; padding: 16px 20px; background: #fff; border-bottom: 1px solid #dfe3e8; }
+        .kitchen-toolbar__modes { flex: 0 0 auto; }
+        .kitchen-toolbar__statuses { display: flex; gap: 8px; flex-wrap: wrap; }
+        .kitchen-toolbar__actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+        .status-button { min-width: 106px; }
+        .status-count { display: inline-flex; justify-content: center; min-width: 24px; margin-left: 6px; font-weight: 700; }
+        .kitchen-content { padding: 18px 20px 28px; }
+        .queue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+        .queue-card, .group-row, .print-order { background: #fff; border: 1px solid #dfe3e8; border-radius: 6px; box-shadow: 0 1px 2px rgba(31, 41, 51, .04); }
+        .queue-card { position: relative; min-height: 230px; display: flex; flex-direction: column; }
+        .queue-card--selectable { cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+        .queue-card--selectable:hover { border-color: #79bbff; box-shadow: 0 3px 10px rgba(64, 158, 255, .16); }
+        .queue-card--selectable:focus-visible { outline: 3px solid rgba(64, 158, 255, .28); outline-offset: 2px; }
+        .queue-card--selected { border-color: #409eff; background: #f4f9ff; box-shadow: 0 0 0 2px rgba(64, 158, 255, .16); }
+        .queue-card__selection { position: absolute; z-index: 2; top: 14px; left: 16px; width: 30px; height: 30px; display: grid; place-items: center; }
+        .queue-card__selection .el-checkbox { display: flex; align-items: center; justify-content: center; }
+        .queue-card__selection .el-checkbox__inner { width: 26px; height: 26px; border-width: 2px; border-radius: 5px; }
+        .queue-card__selection .el-checkbox__inner::after { width: 7px; height: 14px; left: 8px; top: 3px; border-width: 2px; border-left: 0; border-top: 0; }
+        .queue-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 16px 10px; border-bottom: 1px solid #edf0f2; }
+        .queue-card__head--selectable { padding-left: 58px; }
+        .ticket-number { font-size: 22px; line-height: 1.2; font-weight: 700; color: #172b4d; word-break: break-word; }
+        .order-no { margin-top: 4px; color: #7b8794; font-size: 12px; }
+        .queue-card__body { flex: 1; padding: 14px 16px; }
+        .dish-line { display: flex; align-items: flex-start; gap: 10px; }
+        .dish-name { flex: 1; font-size: 18px; line-height: 1.45; font-weight: 700; word-break: break-word; }
+        .dish-quantity { flex: 0 0 auto; color: #d4380d; font-size: 24px; line-height: 1.2; font-weight: 700; }
+        .dish-meta { margin-top: 10px; color: #52606d; line-height: 1.6; word-break: break-word; }
+        .batch-number { margin-top: 10px; padding: 7px 9px; border-radius: 4px; background: #eef5ff; color: #245b99; font-size: 12px; font-weight: 700; word-break: break-all; }
+        .dish-remark { margin-top: 10px; padding: 8px 10px; border-left: 3px solid #e6a23c; background: #fff8e8; color: #7a4d00; word-break: break-word; }
+        .queue-card__foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 10px 16px; border-top: 1px solid #edf0f2; }
+        .time-label { color: #7b8794; font-size: 12px; }
+        .group-list, .print-list { display: grid; gap: 14px; }
+        .group-row__head, .print-order__head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid #dfe3e8; }
+        .group-row__title, .print-order__number { min-width: 0; font-size: 18px; font-weight: 700; word-break: break-word; }
+        .group-row__summary { display: flex; align-items: center; gap: 10px; margin-left: auto; white-space: nowrap; }
+        .group-row__quantity { color: #d4380d; font-size: 22px; font-weight: 700; }
+        .source-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        .source-table th, .source-table td { padding: 10px 16px; border-bottom: 1px solid #edf0f2; text-align: left; vertical-align: top; word-break: break-word; }
+        .source-table th { color: #52606d; background: #fafbfc; font-size: 12px; font-weight: 600; }
+        .source-table tr:last-child td { border-bottom: 0; }
+        .source-table .qty-cell { width: 72px; text-align: right; font-weight: 700; }
+        .group-row__foot, .print-order__foot { display: flex; justify-content: flex-end; padding: 12px 16px; border-top: 1px solid #edf0f2; }
+        .print-order__meta { color: #7b8794; font-size: 12px; }
+        .print-order__quantity { margin-left: auto; font-size: 18px; font-weight: 700; color: #d4380d; }
+        .empty-state { padding: 80px 20px; background: #fff; border: 1px solid #dfe3e8; border-radius: 6px; text-align: center; color: #7b8794; }
+        .history-pagination { display: flex; justify-content: center; margin-top: 20px; padding: 14px; background: #fff; border: 1px solid #dfe3e8; border-radius: 6px; }
+        .empty-state i { display: block; margin-bottom: 12px; font-size: 38px; color: #c0c4cc; }
+        @media (max-width: 900px) {
+            .kitchen-toolbar { align-items: stretch; flex-direction: column; }
+            .kitchen-toolbar__actions { margin-left: 0; justify-content: space-between; }
+            .kitchen-content { padding: 12px; }
+            .queue-grid { grid-template-columns: 1fr; }
+            .group-row__head, .print-order__head { align-items: flex-start; flex-wrap: wrap; }
+            .group-row__summary { width: 100%; margin-left: 0; }
+            .source-table th, .source-table td { padding: 9px 10px; }
+        }
+    </style>
+</head>
+<body>
+<header class="kitchen-workbench__header">
+    <a class="kitchen-workbench__brand" th:href="@{/admin}">
+        <span class="kitchen-workbench__mark">J</span>
+        <span class="kitchen-workbench__title" th:text="#{kitchen.title}">Kitchen Production</span>
+    </a>
+    <div class="kitchen-workbench__actions">
+        <th:block th:replace="~{fragment/language-switcher :: switcher}" />
+        <th:block th:replace="~{fragment/user-menu :: menu}" />
+    </div>
+</header>
+<main>
+    <div id="kitchen-app" class="kitchen-app" v-cloak>
+        <div class="kitchen-toolbar">
+            <el-radio-group v-model="dispatchMode" size="small" class="kitchen-toolbar__modes">
+                <el-radio-button label="PAPERLESS" th:text="#{kitchen.mode.paperless}">Paperless</el-radio-button>
+                <el-radio-button label="PRINT" th:text="#{kitchen.mode.print}">Printed Tickets</el-radio-button>
+            </el-radio-group>
+            <div class="kitchen-toolbar__statuses">
+                <el-button v-for="option in statusOptions" :key="option.value" class="status-button" size="small"
+                           :type="status === option.value ? 'primary' : 'default'" @click="changeStatus(option.value)">
+                    {{ option.label }}<span class="status-count">{{ statusCount(option.value) }}</span>
+                </el-button>
+            </div>
+            <div class="kitchen-toolbar__actions">
+                <el-button v-if="dispatchMode === 'PAPERLESS' && status === 'COOKING'" type="success"
+                           icon="el-icon-check" size="small" :disabled="selectedBatchNos.length === 0"
+                           @click="completeSelectedBatches">{{ i18n.completeSelected }} ({{ selectedBatchNos.length }})</el-button>
+                <el-switch v-if="canGroup" v-model="grouped" active-text="Group Same Items" @change="fetchQueue" th:attr="active-text=#{kitchen.groupSameItems}"></el-switch>
+                <el-button icon="el-icon-refresh" size="small" :loading="loading" @click="fetchQueue" th:text="#{kitchen.refresh}">Refresh</el-button>
+            </div>
+        </div>
+
+        <section class="kitchen-content" v-loading="loading">
+            <div v-if="grouped && groups.length" class="group-list">
+                <article v-for="group in groups" :key="group.key" class="group-row">
+                    <header class="group-row__head">
+                        <div class="group-row__title">{{ group.itemName }}</div>
+                        <el-tag v-if="group.specification" size="small" type="info">{{ group.specification }}</el-tag>
+                        <div class="group-row__summary">
+                            <span>{{ group.orderCount }} {{ i18n.ordersUnit }}</span><span class="group-row__quantity">× {{ group.totalQuantity }}</span>
+                        </div>
+                    </header>
+                    <table class="source-table">
+                        <thead><tr><th style="width:22%" th:text="#{kitchen.number}">Number</th><th style="width:22%" th:text="#{order.no}">Order No.</th><th th:text="#{order.item.remark}">Remark</th><th class="qty-cell" th:text="#{order.item.qty}">Qty</th></tr></thead>
+                        <tbody>
+                        <tr v-for="item in group.items" :key="item.id">
+                            <td><strong>{{ item.number }}</strong></td><td>{{ item.orderNo }}</td>
+                            <td>{{ item.remark || '-' }}</td><td class="qty-cell">× {{ item.quantity }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    <footer class="group-row__foot">
+                        <el-button type="primary" icon="el-icon-video-play" @click="startGroup(group)" th:text="#{kitchen.action.startGroup}">Start Group</el-button>
+                    </footer>
+                </article>
+            </div>
+
+            <div v-else-if="dispatchMode === 'PAPERLESS' && items.length" class="queue-grid">
+                <article v-for="item in items" :key="item.id" class="queue-card"
+                         :class="{ 'queue-card--selected': isSelected(item), 'queue-card--selectable': item.status === 'COOKING' }"
+                         :tabindex="item.status === 'COOKING' ? 0 : null"
+                         :role="item.status === 'COOKING' ? 'checkbox' : null"
+                         :aria-checked="item.status === 'COOKING' ? String(isSelected(item)) : null"
+                         @click="toggleCardSelection(item)"
+                         @keydown.space.prevent="toggleCardSelection(item)"
+                         @keydown.enter.prevent="toggleCardSelection(item)">
+                    <div v-if="item.status === 'COOKING'" class="queue-card__selection" @click.stop>
+                        <el-checkbox :value="isSelected(item)"
+                                     @change="toggleBatchSelection(item, $event)"></el-checkbox>
+                    </div>
+                    <header class="queue-card__head" :class="{ 'queue-card__head--selectable': item.status === 'COOKING' }">
+                        <div><div class="ticket-number">{{ item.number }}</div><div class="order-no">{{ item.orderNo }}</div></div>
+                        <el-tag :type="statusType(item.status)" size="small">{{ statusLabel(item.status) }}</el-tag>
+                    </header>
+                    <div class="queue-card__body">
+                        <div class="dish-line"><div class="dish-name">{{ item.itemName }}</div><div class="dish-quantity">× {{ item.quantity }}</div></div>
+                        <div v-if="item.specification" class="dish-meta">{{ i18n.specification }}: {{ item.specification }}</div>
+                        <div v-if="item.orderBatchSeq" class="dish-meta">{{ i18n.orderBatch }}: {{ item.orderBatchSeq }}</div>
+                        <div v-if="item.productionBatchNo" class="batch-number">{{ i18n.productionBatch }}: {{ item.productionBatchNo }}</div>
+                        <div v-if="item.remark" class="dish-remark">{{ item.remark }}</div>
+                    </div>
+                    <footer class="queue-card__foot">
+                        <span class="time-label">{{ displayTime(item.confirmedAt) }}</span>
+                        <el-button v-if="item.status === 'WAITING'" type="primary" size="small" icon="el-icon-video-play" @click="startItem(item)" th:text="#{kitchen.action.startItem}">Start</el-button>
+                        <span v-if="item.status === 'COOKING'" class="time-label">{{ i18n.batchSelectionHint }}</span>
+                    </footer>
+                </article>
+            </div>
+
+            <div v-else-if="dispatchMode === 'PRINT' && printOrders.length" class="print-list">
+                <article v-for="order in printOrders" :key="order.orderId" class="print-order">
+                    <header class="print-order__head">
+                        <div><div class="print-order__number">{{ order.number }}</div><div class="print-order__meta">{{ order.orderNo }} · {{ displayTime(order.confirmedAt) }}</div></div>
+                        <el-tag :type="statusType(status)" size="small">{{ statusLabel(status) }}</el-tag>
+                        <div class="print-order__quantity">{{ i18n.totalPrefix }} {{ order.totalQuantity }} {{ i18n.servingsUnit }}</div>
+                    </header>
+                    <table class="source-table">
+                        <thead><tr><th th:text="#{order.item.name}">Item</th><th style="width:25%" th:text="#{kitchen.specification}">Specification</th><th style="width:25%" th:text="#{order.item.remark}">Remark</th><th class="qty-cell" th:text="#{order.item.qty}">Qty</th></tr></thead>
+                        <tbody>
+                        <tr v-for="item in order.items" :key="item.id">
+                            <td><strong>{{ item.itemName }}</strong></td><td>{{ item.specification || '-' }}</td>
+                            <td>{{ item.remark || '-' }}</td><td class="qty-cell">× {{ item.quantity }}</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    <footer class="print-order__foot" v-if="status === 'WAITING'">
+                        <el-button type="primary" icon="el-icon-printer" @click="printOrder(order)" th:text="#{kitchen.action.print}">Print Kitchen Ticket</el-button>
+                    </footer>
+                    <footer class="print-order__foot" v-else><span class="time-label">{{ i18n.job }} {{ order.printJobId || '-' }}</span></footer>
+                </article>
+            </div>
+
+            <div v-else class="empty-state"><i class="el-icon-finished"></i><span th:text="#{kitchen.empty}">The queue is empty</span></div>
+
+            <div v-if="paged && total > 0" class="history-pagination">
+                <el-pagination background layout="prev, pager, next, total"
+                               :current-page="page" :page-size="pageSize" :total="total"
+                               @current-change="changePage"></el-pagination>
+            </div>
+        </section>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+    <th:block th:replace="~{fragment/element-locale :: scripts}" />
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script th:inline="javascript">
+        var csrfToken = /*[[${_csrf.token}]]*/ '';
+        var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+        axios.defaults.baseURL = '/admin/plugins/order-core/kitchen';
+        axios.defaults.headers.common[csrfHeader] = csrfToken;
+
+        new Vue({
+            el: '#kitchen-app',
+            data: function () { return {
+                i18n: {
+                    waiting: /*[[#{kitchen.status.waiting}]]*/ 'Waiting',
+                    cooking: /*[[#{kitchen.status.cooking}]]*/ 'Cooking',
+                    completed: /*[[#{kitchen.status.completed}]]*/ 'Completed',
+                    waitingPrint: /*[[#{kitchen.status.waitingPrint}]]*/ 'Waiting to Print',
+                    printed: /*[[#{kitchen.status.printed}]]*/ 'Queued',
+                    ordersUnit: /*[[#{kitchen.unit.orders}]]*/ 'orders',
+                    servingsUnit: /*[[#{kitchen.unit.servings}]]*/ 'servings',
+                    totalPrefix: /*[[#{kitchen.totalPrefix}]]*/ 'Total',
+                    specification: /*[[#{kitchen.specification}]]*/ 'Specification',
+                    orderBatch: /*[[#{kitchen.orderBatch}]]*/ 'Order batch',
+                    productionBatch: /*[[#{kitchen.productionBatch}]]*/ 'Production batch',
+                    completeSelected: /*[[#{kitchen.action.completeSelected}]]*/ 'Complete selected batches',
+                    batchSelectionHint: /*[[#{kitchen.selection.batchHint}]]*/ 'Selecting one item selects its batch',
+                    job: /*[[#{kitchen.job}]]*/ 'Job',
+                    started: /*[[#{kitchen.message.started}]]*/ 'Production started',
+                    groupStarted: /*[[#{kitchen.message.groupStarted}]]*/ 'Group production started',
+                    completedMessage: /*[[#{kitchen.message.completed}]]*/ 'Item completed',
+                    batchesCompleted: /*[[#{kitchen.message.batchesCompleted}]]*/ 'Selected production batches completed',
+                    printConfirm: /*[[#{kitchen.print.confirm}]]*/ 'Print the kitchen ticket for {0}?',
+                    printConfirmTitle: /*[[#{kitchen.print.confirmTitle}]]*/ 'Print Confirmation',
+                    print: /*[[#{kitchen.print.confirmButton}]]*/ 'Print',
+                    cancel: /*[[#{kitchen.cancel}]]*/ 'Cancel',
+                    printCreated: /*[[#{kitchen.message.printCreated}]]*/ 'Print job created',
+                    operationFailed: /*[[#{kitchen.message.operationFailed}]]*/ 'Operation failed. Try again later.'
+                },
+                dispatchMode: 'PAPERLESS', status: 'WAITING', grouped: false, items: [], groups: [], counts: {}, selectedItemIds: [], loading: false, refreshTimer: null,
+                paged: false, page: 1, pageSize: 50, total: 0, totalPages: 1
+            }; },
+            computed: {
+                statusOptions: function () {
+                    return this.dispatchMode === 'PAPERLESS'
+                        ? [{ value: 'WAITING', label: this.i18n.waiting }, { value: 'COOKING', label: this.i18n.cooking }, { value: 'COMPLETED', label: this.i18n.completed }]
+                        : [{ value: 'WAITING', label: this.i18n.waitingPrint }, { value: 'PRINTED', label: this.i18n.printed }];
+                },
+                canGroup: function () { return this.dispatchMode === 'PAPERLESS' && this.status === 'WAITING'; },
+                selectedBatchNos: function () {
+                    var selected = this.selectedItemIds;
+                    var batches = {};
+                    this.items.forEach(function (item) {
+                        if (selected.indexOf(item.id) !== -1 && item.productionBatchNo) batches[item.productionBatchNo] = true;
+                    });
+                    return Object.keys(batches);
+                },
+                printOrders: function () {
+                    var orders = {};
+                    this.items.forEach(function (item) {
+                        if (!orders[item.orderId]) orders[item.orderId] = { orderId: item.orderId, orderNo: item.orderNo, number: item.number, confirmedAt: item.confirmedAt, printJobId: item.printJobId, totalQuantity: 0, items: [] };
+                        orders[item.orderId].items.push(item);
+                        orders[item.orderId].totalQuantity += Number(item.quantity || 0);
+                    });
+                    return Object.keys(orders).map(function (key) { return orders[key]; });
+                }
+            },
+            watch: { dispatchMode: function () { this.status = 'WAITING'; this.page = 1; this.grouped = false; this.selectedItemIds = []; this.fetchQueue(); } },
+            mounted: function () { this.fetchQueue(); this.refreshTimer = window.setInterval(this.fetchQueue, 10000); },
+            beforeDestroy: function () { window.clearInterval(this.refreshTimer); },
+            methods: {
+                changeStatus: function (value) { this.status = value; this.page = 1; this.selectedItemIds = []; if (!this.canGroup) this.grouped = false; this.fetchQueue(); },
+                changePage: function (page) { this.page = page; this.fetchQueue(); },
+                fetchQueue: function () {
+                    var self = this;
+                    var selectedBatchNos = this.selectedBatchNos.slice();
+                    this.loading = true;
+                    axios.get('/queue', { params: { status: this.status, dispatchMode: this.dispatchMode, grouped: this.grouped, page: this.page } })
+                        .then(function (response) {
+                            self.items = response.data.items || [];
+                            self.groups = response.data.groups || [];
+                            self.counts = response.data.statusCounts || {};
+                            self.paged = Boolean(response.data.paged);
+                            self.page = Number(response.data.page || 1);
+                            self.pageSize = Number(response.data.pageSize || 50);
+                            self.total = Number(response.data.total || 0);
+                            self.totalPages = Number(response.data.totalPages || 1);
+                            if (self.page > self.totalPages) {
+                                self.page = self.totalPages;
+                                self.fetchQueue();
+                                return;
+                            }
+                            self.restoreBatchSelection(selectedBatchNos);
+                        })
+                        .catch(this.showError).finally(function () { self.loading = false; });
+                },
+                restoreBatchSelection: function (batchNos) {
+                    if (this.status !== 'COOKING' || this.dispatchMode !== 'PAPERLESS' || !batchNos.length) {
+                        this.selectedItemIds = [];
+                        return;
+                    }
+                    this.selectedItemIds = this.items.filter(function (item) {
+                        return item.status === 'COOKING' && batchNos.indexOf(item.productionBatchNo) !== -1;
+                    }).map(function (item) { return item.id; });
+                },
+                startItem: function (item) { this.postAction('/queue/' + item.id + '/start', this.i18n.started); },
+                startGroup: function (group) { this.postAction('/queue/groups/start', this.i18n.groupStarted, { queueItemIds: group.items.map(function (item) { return item.id; }) }); },
+                isSelected: function (item) { return this.selectedItemIds.indexOf(item.id) !== -1; },
+                toggleCardSelection: function (item) {
+                    if (item.status !== 'COOKING') return;
+                    var batchIds = this.batchItemIds(item.productionBatchNo);
+                    var batchSelected = batchIds.length > 0 && batchIds.every(function (id) {
+                        return this.selectedItemIds.indexOf(id) !== -1;
+                    }, this);
+                    this.toggleBatchSelection(item, !batchSelected);
+                },
+                batchItemIds: function (batchNo) {
+                    if (!batchNo) return [];
+                    return this.items.filter(function (candidate) { return candidate.productionBatchNo === batchNo; })
+                        .map(function (candidate) { return candidate.id; });
+                },
+                toggleBatchSelection: function (item, checked) {
+                    var batchIds = this.batchItemIds(item.productionBatchNo);
+                    if (!batchIds.length) return;
+                    if (checked) {
+                        this.selectedItemIds = Array.from(new Set(this.selectedItemIds.concat(batchIds)));
+                    } else {
+                        this.selectedItemIds = this.selectedItemIds.filter(function (id) { return batchIds.indexOf(id) === -1; });
+                    }
+                },
+                completeSelectedBatches: function () {
+                    this.postAction('/queue/production-batches/complete', this.i18n.batchesCompleted,
+                        { productionBatchNos: this.selectedBatchNos });
+                },
+                printOrder: function (order) {
+                    var self = this;
+                    this.$confirm(this.i18n.printConfirm.replace('{0}', order.number), this.i18n.printConfirmTitle, { confirmButtonText: this.i18n.print, cancelButtonText: this.i18n.cancel, type: 'warning' })
+                        .then(function () { self.postAction('/queue/orders/' + order.orderId + '/print', self.i18n.printCreated); }).catch(function () {});
+                },
+                postAction: function (url, message, body) {
+                    var self = this; this.loading = true;
+                    axios.post(url, body || {}).then(function () { self.$message.success(message); self.fetchQueue(); })
+                        .catch(function (error) { self.loading = false; self.showError(error); });
+                },
+                showError: function () { this.$message.error(this.i18n.operationFailed); },
+                statusCount: function (value) { return this.counts[value] || 0; },
+                statusLabel: function (value) { return { WAITING: this.dispatchMode === 'PRINT' ? this.i18n.waitingPrint : this.i18n.waiting, COOKING: this.i18n.cooking, COMPLETED: this.i18n.completed, PRINTED: this.i18n.printed }[value] || value; },
+                statusType: function (value) { return { WAITING: 'warning', COOKING: 'danger', COMPLETED: 'success', PRINTED: 'success' }[value] || 'info'; },
+                displayTime: function (value) { return value ? String(value).replace('T', ' ').substring(0, 16) : '-'; }
+            }
+        });
+    </script>
+</main>
+</body>
+</html>

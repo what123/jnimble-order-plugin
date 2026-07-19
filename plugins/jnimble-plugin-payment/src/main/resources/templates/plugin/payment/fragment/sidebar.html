@@ -1,0 +1,13 @@
+<span class="admin-shell__nav-label" th:text="#{admin.layout.section.finance}">财务收款</span>
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'plugin:' + pluginId + ':records'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/payment/records}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{payment.sidebar.records}">收款记录</span>
+</a>
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'plugin:' + pluginId + ':diagnostics'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/payment/diagnostics}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{payment.sidebar.diagnostics}">支付诊断</span>
+</a>

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": "1.0",
+  "id": "order-table",
+  "name": "Table Ordering Plugin",
+  "nameKey": "plugin.order-table.name",
+  "description": "Table-based ordering, table management and POS workflow",
+  "descriptionKey": "plugin.order-table.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.order.table.OrderTablePluginBoot",
+  "spring": {
+    "configurationClass": "com.jnimble.plugin.order.table.OrderTablePluginConfiguration"
+  },
+  "dependencies": [
+    {
+      "pluginId": "order-core",
+      "version": "1.x",
+      "required": true
+    },
+    {
+      "pluginId": "menu-manager",
+      "version": "1.x",
+      "required": true
+    }
+  ],
+  "i18n": {
+    "basename": "i18n/messages"
+  },
+  "admin": {
+    "entry": "/tables",
+    "labelKey": "table.admin.title",
+    "permission": "order-table.admin.view"
+  },
+  "permissions": [
+    {
+      "code": "order-table.pos.view",
+      "name": "View table POS",
+      "nameKey": "permission.order-table.pos.view"
+    },
+    {
+      "code": "order-table.admin.view",
+      "name": "View table management",
+      "nameKey": "permission.order-table.admin.view"
+    },
+    {
+      "code": "order-table.pos.open",
+      "name": "Open table",
+      "nameKey": "permission.order-table.pos.open"
+    },
+    {
+      "code": "order-table.pos.confirm",
+      "name": "Confirm customer orders",
+      "nameKey": "permission.order-table.pos.confirm"
+    },
+    {
+      "code": "order-table.pos.settle",
+      "name": "Settle table order",
+      "nameKey": "permission.order-table.pos.settle"
+    }
+  ],
+  "migration": {
+    "enabled": true,
+    "location": "classpath:db/migration/plugin/order-table",
+    "table": "flyway_schema_history_order_table",
+    "baselineOnMigrate": true,
+    "failOnError": true
+  }
+}

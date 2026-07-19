@@ -1,0 +1,12 @@
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'plugin:' + pluginId + ':nodes'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/{pluginId}/nodes(pluginId=${pluginId})}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{printer-core.sidebar.nodes}">流程节点</span>
+</a>
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav != null and #strings.startsWith(activeNav, 'plugin:' + pluginId + ':templates')} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/{pluginId}/templates(pluginId=${pluginId})}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{printer-core.sidebar.templates}">打印模板</span>
+</a>

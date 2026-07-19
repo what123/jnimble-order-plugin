@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{menu.item.manage}">Manage Items</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+  <style>
+    [v-cloak] { display: none; }
+    .app-items { padding: 20px; }
+    .app-items .el-table { margin-top: 16px; }
+    .app-items .filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+    .app-items .filter-bar .el-input { width: 200px; }
+    .spec-section { border: 1px solid #dcdfe6; border-radius: 4px; padding: 16px; margin-bottom: 18px; }
+    .spec-section__title { font-size: 14px; font-weight: 600; color: #606266; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+    .spec-group-card { border: 1px solid #e4e7ed; border-radius: 4px; margin-bottom: 12px; background: #fafafa; overflow: hidden; }
+    .spec-group-card__head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f0f2f5; border-bottom: 1px solid #e4e7ed; flex-wrap: wrap; }
+    .spec-group-card__head .grp-name { width: 150px; }
+    .spec-group-card__head .grp-sort { width: 90px; }
+    .spec-group-card__head .grp-del { margin-left: auto; }
+    .spec-group-card__body { padding: 10px 12px; }
+    .spec-opt-table { width: 100%; border-collapse: collapse; }
+    .spec-opt-table th { padding: 4px 4px; vertical-align: middle; text-align: left; font-weight: 500; color: #909399; font-size: 12px; border-bottom: 1px solid #ebeef5; }
+    .spec-opt-table td { padding: 4px 4px; vertical-align: middle; }
+    .spec-opt-table td .el-input,
+    .spec-opt-table td .el-input-number { width: 100%; }
+    .spec-opt-table td.col-name { width: 30%; }
+    .spec-opt-table td.col-price { width: 22%; }
+    .spec-opt-table td.col-sort { width: 18%; }
+    .spec-opt-table td.col-status { width: 15%; }
+    .spec-opt-table td.col-action { width: 15%; text-align: center; }
+    .price-adjust { color: #e6a23c; font-size: 12px; }
+    .spec-summary { color: #909399; font-size: 13px; }
+    .item-main-image { width: 52px; height: 52px; margin: 0 auto; border: 1px solid #e4e7ed; border-radius: 4px; overflow: hidden; background: #f5f7fa; display: flex; align-items: center; justify-content: center; }
+    .item-main-image .el-image { width: 100%; height: 100%; display: block; }
+    .item-main-image__empty { color: #c0c4cc; font-size: 22px; }
+    .item-image-grid { display: grid; grid-template-columns: repeat(auto-fill, 112px); gap: 12px; align-items: start; }
+    .item-image-card { position: relative; width: 112px; height: 112px; border: 1px solid #dcdfe6; border-radius: 4px; overflow: hidden; background: #f5f7fa; }
+    .item-image-card .el-image { width: 100%; height: 100%; display: block; }
+    .item-image-card__badge { position: absolute; top: 6px; left: 6px; z-index: 2; padding: 2px 7px; border-radius: 3px; background: #303133; color: #fff; font-size: 12px; line-height: 20px; }
+    .item-image-card__actions { position: absolute; right: 0; bottom: 0; left: 0; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 6px; background: rgba(0, 0, 0, 0.58); }
+    .item-image-card__actions .el-button { width: 28px; height: 28px; margin: 0; padding: 0; color: #fff; border-color: rgba(255, 255, 255, 0.55); background: transparent; }
+    .item-image-card__actions .el-button:hover,
+    .item-image-card__actions .el-button:focus { color: #303133; border-color: #fff; background: #fff; }
+    .item-image-upload,
+    .item-image-upload .el-upload { width: 112px; height: 112px; display: block; }
+    .item-image-upload__trigger { width: 112px; height: 112px; padding: 0; border: 1px dashed #c0c4cc; border-radius: 4px; background: #fff; color: #606266; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font: inherit; }
+    .item-image-upload__trigger:hover,
+    .item-image-upload__trigger:focus { color: #409eff; border-color: #409eff; outline: none; }
+    .item-image-upload__trigger i { font-size: 24px; }
+    .item-image-upload__trigger span { font-size: 12px; }
+    .item-image-upload__trigger--disabled { color: #c0c4cc; border-color: #e4e7ed; background: #f5f7fa; cursor: not-allowed; }
+    .item-image-count { display: block; margin-top: 8px; color: #909399; font-size: 12px; line-height: 20px; }
+    @media (max-width: 720px) {
+      .item-edit-dialog { width: calc(100% - 24px) !important; margin-top: 2vh !important; }
+      .item-image-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+      .item-image-card,
+      .item-image-upload,
+      .item-image-upload .el-upload,
+      .item-image-upload__trigger { width: 100%; aspect-ratio: 1; height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{menu.item.manage}">Manage Items</h1>
+
+  <main layout:fragment="content">
+    <div id="app-items" class="app-items" v-cloak>
+      <div class="filter-bar">
+        <el-select v-model="filter.categoryId" placeholder="Select category" clearable @change="fetchItems" th:attr="placeholder=#{menu.item.category.placeholder}">
+          <el-option v-for="cat in categories" :key="cat.id" :label="cat.name" :value="cat.id"></el-option>
+        </el-select>
+        <el-input v-model="filter.keyword" placeholder="Search item name" clearable @input="onKeywordInput" th:attr="placeholder=#{menu.item.search.placeholder}"></el-input>
+        <el-select v-model="filter.status" placeholder="Status" clearable @change="fetchItems" th:attr="placeholder=#{menu.item.status}">
+          <el-option label="Enabled" value="ENABLED" th:attr="label=#{menu.common.enabled}"></el-option>
+          <el-option label="Disabled" value="DISABLED" th:attr="label=#{menu.common.disabled}"></el-option>
+        </el-select>
+        <el-button @click="fetchItems" th:text="#{menu.common.search}">Search</el-button>
+        <el-button type="primary" style="margin-left:auto" @click="openDialog(null)" th:text="#{menu.item.create}">New Item</el-button>
+      </div>
+
+      <el-table :data="items" border stripe style="width: 100%">
+        <el-table-column prop="id" label="ID" width="80" align="center"></el-table-column>
+        <el-table-column label="Primary Image" width="84" align="center" th:attr="label=#{menu.item.image.primary}">
+          <template slot-scope="scope">
+            <div class="item-main-image">
+              <el-image v-if="primaryImagePath(scope.row)"
+                        :src="primaryImagePath(scope.row)"
+                        :preview-src-list="imagePaths(scope.row)"
+                        fit="cover"></el-image>
+              <i v-else class="el-icon-picture-outline item-main-image__empty" aria-label="No image" th:attr="aria-label=#{menu.item.image.empty}"></i>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="name" label="Name" min-width="140" th:attr="label=#{menu.item.name}"></el-table-column>
+        <el-table-column label="Category" width="100" th:attr="label=#{menu.item.category}">
+          <template slot-scope="scope">{{ categoryName(scope.row.categoryId) }}</template>
+        </el-table-column>
+        <el-table-column label="Price" width="110" align="right" th:attr="label=#{menu.item.price}">
+          <template slot-scope="scope">
+            <template v-if="scope.row.groups && scope.row.groups.length > 0">
+              <span th:text="#{menu.item.multiSpec}">Multiple specifications</span>
+            </template>
+            <span v-else>¥{{ scope.row.price }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="Specifications" min-width="240" th:attr="label=#{menu.item.specification}">
+          <template slot-scope="scope">
+            <span v-if="scope.row.groups && scope.row.groups.length > 0" class="spec-summary">
+              <span v-for="(g, gi) in scope.row.groups" :key="g.id || gi">
+                {{ g.name }}: <span v-for="(o, oi) in optionsSummary(g)" :key="o.id || oi">{{ o.name }}<template v-if="o.priceAdjust > 0"><span class="price-adjust">(+¥{{ o.priceAdjust }})</span></template><span v-if="oi < (optionsSummary(g).length - 1)"> / </span></span><span v-if="gi < scope.row.groups.length - 1">; </span>
+              </span>
+            </span>
+            <span v-else class="spec-summary" th:text="#{menu.item.noSpecification}">No specifications</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="Status" width="100" align="center" th:attr="label=#{menu.item.status}">
+          <template slot-scope="scope">
+            <el-tag :type="scope.row.status === 'ENABLED' ? 'success' : 'danger'" size="small">
+              {{ scope.row.status === 'ENABLED' ? i18n.enabled : i18n.disabled }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="Actions" width="220" align="center" th:attr="label=#{common.actions}">
+          <template slot-scope="scope">
+            <el-button size="mini" @click="openDialog(scope.row)">{{ i18n.edit }}</el-button>
+            <el-button v-if="scope.row.status === 'ENABLED'" size="mini" @click="toggleStatus(scope.row, 'DISABLED')">{{ i18n.unlist }}</el-button>
+            <el-button v-if="scope.row.status === 'DISABLED'" size="mini" type="success" @click="toggleStatus(scope.row, 'ENABLED')">{{ i18n.list }}</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-dialog :title="dialogTitle"
+                 custom-class="item-edit-dialog"
+                 :visible.sync="dialogVisible"
+                 width="760px"
+                 :close-on-click-modal="false"
+                 :before-close="handleDialogClose"
+                 top="3vh"
+                 @closed="resetUploadState">
+        <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+          <el-form-item label="Name" prop="name" th:attr="label=#{menu.item.name}">
+            <el-input v-model="form.name" placeholder="Enter item name" maxlength="200" th:attr="placeholder=#{menu.item.name.placeholder}"></el-input>
+          </el-form-item>
+          <el-form-item label="Category" prop="categoryId" th:attr="label=#{menu.item.category}">
+            <el-select v-model="form.categoryId" placeholder="Select category" style="width:100%" th:attr="placeholder=#{menu.item.category.placeholder}">
+              <el-option v-for="cat in categories" :key="cat.id" :label="cat.name" :value="cat.id"></el-option>
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="Images" th:attr="label=#{menu.item.images}">
+            <div class="item-image-grid">
+              <div v-for="(image, index) in form.images"
+                   :key="image.imagePath"
+                   class="item-image-card">
+                <el-image :src="image.imagePath"
+                          :preview-src-list="formImagePaths()"
+                          fit="cover"></el-image>
+                <span v-if="index === 0" class="item-image-card__badge" th:text="#{menu.item.image.primary.badge}">Primary</span>
+                <div class="item-image-card__actions">
+                  <el-tooltip v-if="index > 0" content="Set as primary" placement="top" th:attr="content=#{menu.item.image.setPrimary}">
+                    <el-button size="mini"
+                               circle
+                               icon="el-icon-star-off"
+                               aria-label="Set as primary"
+                               th:attr="aria-label=#{menu.item.image.setPrimary}"
+                               :disabled="uploading"
+                               @click.stop="setPrimaryImage(index)"></el-button>
+                  </el-tooltip>
+                  <el-tooltip content="Delete image" placement="top" th:attr="content=#{menu.item.image.delete}">
+                    <el-button size="mini"
+                               circle
+                               icon="el-icon-delete"
+                               aria-label="Delete image"
+                               th:attr="aria-label=#{menu.item.image.delete}"
+                               :disabled="uploading"
+                               @click.stop="removeImage(index)"></el-button>
+                  </el-tooltip>
+                </div>
+              </div>
+
+              <el-upload v-if="form.images.length < maxImageCount"
+                         class="item-image-upload"
+                         :action="imageUploadAction"
+                         :headers="uploadHeaders"
+                         name="file"
+                         accept="image/jpeg,image/png,image/gif,image/webp"
+                         multiple
+                         :show-file-list="false"
+                         :before-upload="beforeImageUpload"
+                         :on-success="handleImageUploadSuccess"
+                         :on-error="handleImageUploadError">
+                <button type="button"
+                        class="item-image-upload__trigger"
+                        :class="{ 'item-image-upload__trigger--disabled': uploading }"
+                        :disabled="uploading">
+                  <i :class="uploading ? 'el-icon-loading' : 'el-icon-plus'"></i>
+                  <span>{{ uploading ? i18n.uploading : i18n.uploadImage }}</span>
+                </button>
+              </el-upload>
+            </div>
+            <span class="item-image-count">{{ form.images.length }}/{{ maxImageCount }}</span>
+          </el-form-item>
+
+          <div class="spec-section">
+            <div class="spec-section__title">
+              <span th:text="#{menu.item.specification.config}">Specification Configuration</span>
+              <el-button size="mini" type="primary" icon="el-icon-plus" @click="addGroup" th:text="#{menu.item.specification.addGroup}">Add Group</el-button>
+            </div>
+
+            <div v-if="form.groups.length === 0" style="color:#909399;font-size:12px;margin-bottom:8px">
+              <span th:text="#{menu.item.specification.emptyHelp}">The default price and unit below are used when no group is configured.</span>
+            </div>
+
+            <div v-for="(group, gi) in form.groups" :key="gi" class="spec-group-card">
+              <div class="spec-group-card__head">
+                <el-input class="grp-name" v-model="group.name" placeholder="Group name" size="small" th:attr="placeholder=#{menu.item.specification.groupName.placeholder}"></el-input>
+                <el-checkbox v-model="group.required" th:text="#{menu.item.specification.required}">Required</el-checkbox>
+                <el-checkbox v-model="group.multi" th:text="#{menu.item.specification.multiple}">Multiple</el-checkbox>
+                <el-input-number class="grp-sort" v-model="group.sortOrder" :min="0" :max="9999" size="small" controls-position="right"></el-input-number>
+                <span class="grp-del">
+                  <el-button size="mini" type="danger" plain icon="el-icon-delete" @click="removeGroup(gi)" th:text="#{menu.common.delete}">Delete</el-button>
+                </span>
+              </div>
+              <div class="spec-group-card__body">
+                <table class="spec-opt-table" v-if="group.options.length > 0">
+                  <thead>
+                    <tr>
+                      <th class="col-name" th:text="#{menu.item.specification.option}">Option</th>
+                      <th class="col-price" th:text="#{menu.item.specification.priceAdjust}">Price Adjustment</th>
+                      <th class="col-sort" th:text="#{menu.category.sort}">Sort Order</th>
+                      <th class="col-status" th:text="#{menu.item.status}">Status</th>
+                      <th class="col-action" th:text="#{common.actions}">Actions</th>
+                    </tr>
+                  </thead>
+                  <tr v-for="(opt, oi) in group.options" :key="oi">
+                    <td class="col-name"><el-input v-model="opt.name" placeholder="Option name" size="mini" th:attr="placeholder=#{menu.item.specification.option.placeholder}"></el-input></td>
+                    <td class="col-price"><el-input-number v-model="opt.priceAdjust" :min="0" :precision="2" :step="0.5" size="mini" controls-position="right"></el-input-number></td>
+                    <td class="col-sort"><el-input-number v-model="opt.sortOrder" :min="0" :max="9999" size="mini" controls-position="right"></el-input-number></td>
+                    <td class="col-status">
+                      <el-select v-model="opt.status" size="mini">
+                        <el-option label="Enabled" value="ENABLED" th:attr="label=#{menu.common.enabled}"></el-option>
+                        <el-option label="Disabled" value="DISABLED" th:attr="label=#{menu.common.disabled}"></el-option>
+                      </el-select>
+                    </td>
+                    <td class="col-action">
+                      <el-button size="mini" type="danger" icon="el-icon-delete" circle @click="removeOption(gi, oi)"></el-button>
+                    </td>
+                  </tr>
+                </table>
+                <div style="margin-top:8px">
+                  <el-button size="mini" icon="el-icon-plus" @click="addOption(gi)" th:text="#{menu.item.specification.addOption}">Add Option</el-button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <el-form-item label="Default Price" prop="price" v-if="form.groups.length === 0" th:attr="label=#{menu.item.defaultPrice}">
+            <el-input-number v-model="form.price" :min="0" :precision="2" :step="1" style="width:200px"></el-input-number>
+          </el-form-item>
+          <el-form-item label="Default Unit" prop="unit" v-if="form.groups.length === 0" th:attr="label=#{menu.item.defaultUnit}">
+            <el-input v-model="form.unit" placeholder="e.g. serving, plate" maxlength="50" style="width:200px" th:attr="placeholder=#{menu.item.unit.placeholder}"></el-input>
+          </el-form-item>
+          <el-form-item label="Description" prop="description" th:attr="label=#{menu.item.description}">
+            <el-input type="textarea" v-model="form.description" :rows="2" maxlength="500"></el-input>
+          </el-form-item>
+          <el-form-item label="Sort Order" prop="sortOrder" th:attr="label=#{menu.category.sort}">
+            <el-input-number v-model="form.sortOrder" :min="0" :max="9999"></el-input-number>
+          </el-form-item>
+          <el-form-item label="Status" prop="status" th:attr="label=#{menu.item.status}">
+            <el-radio-group v-model="form.status">
+              <el-radio label="ENABLED">{{ i18n.enabled }}</el-radio>
+              <el-radio label="DISABLED">{{ i18n.disabled }}</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
+        <span slot="footer">
+          <el-button :disabled="saving || uploading" @click="closeDialog" th:text="#{common.cancel}">Cancel</el-button>
+          <el-button type="primary" @click="handleSave" :loading="saving" :disabled="uploading" th:text="#{common.save}">Save</el-button>
+        </span>
+      </el-dialog>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+    <th:block th:replace="~{fragment/element-locale :: scripts}" />
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script th:inline="javascript">
+      var csrfToken = /*[[${_csrf.token}]]*/ '';
+      var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+
+      axios.defaults.baseURL = '/admin/plugins/menu-manager';
+      axios.defaults.headers.common[csrfHeader] = csrfToken;
+
+      var uploadHeaders = {};
+      uploadHeaders[csrfHeader] = csrfToken;
+
+      new Vue({
+        el: '#app-items',
+        data: {
+          i18n: {
+            enabled: /*[[#{menu.common.enabled}]]*/ 'Enabled',
+            disabled: /*[[#{menu.common.disabled}]]*/ 'Disabled',
+            edit: /*[[#{menu.common.edit}]]*/ 'Edit',
+            list: /*[[#{menu.item.list}]]*/ 'List',
+            unlist: /*[[#{menu.item.unlist}]]*/ 'Unlist',
+            uploading: /*[[#{menu.item.image.uploading}]]*/ 'Uploading',
+            uploadImage: /*[[#{menu.item.image.upload}]]*/ 'Upload Image',
+            createTitle: /*[[#{menu.item.create}]]*/ 'New Item',
+            editTitle: /*[[#{menu.item.edit}]]*/ 'Edit Item',
+            loadFailed: /*[[#{menu.item.loadFailed}]]*/ 'Failed to load items',
+            imageTypeInvalid: /*[[#{menu.item.image.typeInvalid}]]*/ 'Only JPG, PNG, GIF, or WebP images are supported',
+            imageTooLarge: /*[[#{menu.item.image.tooLarge}]]*/ 'Each image must not exceed 5 MB',
+            imageLimit: /*[[#{menu.item.image.limit}]]*/ 'Each item supports up to {0} images',
+            imageUploadFailed: /*[[#{menu.item.image.uploadFailed}]]*/ 'Image upload failed',
+            waitForUpload: /*[[#{menu.item.image.waitForUpload}]]*/ 'Wait for image uploads to finish',
+            created: /*[[#{menu.item.created}]]*/ 'Item created',
+            updated: /*[[#{menu.item.updated}]]*/ 'Item updated',
+            operationFailed: /*[[#{menu.common.operationFailed}]]*/ 'Operation failed',
+            listConfirm: /*[[#{menu.item.listConfirm}]]*/ 'List "{0}"?',
+            unlistConfirm: /*[[#{menu.item.unlistConfirm}]]*/ 'Unlist "{0}"?',
+            confirmTitle: /*[[#{menu.common.confirmTitle}]]*/ 'Confirmation',
+            confirm: /*[[#{menu.common.confirm}]]*/ 'Confirm',
+            cancel: /*[[#{common.cancel}]]*/ 'Cancel',
+            listed: /*[[#{menu.item.listed}]]*/ 'Item listed',
+            unlisted: /*[[#{menu.item.unlisted}]]*/ 'Item unlisted',
+            listFailed: /*[[#{menu.item.listFailed}]]*/ 'Failed to list item',
+            unlistFailed: /*[[#{menu.item.unlistFailed}]]*/ 'Failed to unlist item'
+          },
+          items: [],
+          categories: [],
+          filter: { categoryId: null, keyword: '', status: null },
+          keywordTimer: null,
+          dialogVisible: false,
+          editingId: null,
+          saving: false,
+          pendingUploads: 0,
+          nextImageOrder: 0,
+          maxImageCount: 10,
+          imageUploadAction: '/admin/plugins/menu-manager/items/images',
+          uploadHeaders: uploadHeaders,
+          form: {
+            name: '',
+            categoryId: null,
+            price: 0,
+            unit: '',
+            description: '',
+            sortOrder: 0,
+            status: 'ENABLED',
+            images: [],
+            groups: []
+          },
+          rules: {
+            name: [
+              { required: true, message: /*[[#{menu.item.name.required}]]*/ 'Enter an item name', trigger: 'blur' },
+              { max: 200, message: /*[[#{menu.item.name.tooLong}]]*/ 'Name cannot exceed 200 characters', trigger: 'blur' }
+            ],
+            categoryId: [{ required: true, message: /*[[#{menu.item.category.required}]]*/ 'Select a category', trigger: 'change' }]
+          }
+        },
+        computed: {
+          dialogTitle: function () { return this.editingId ? this.i18n.editTitle : this.i18n.createTitle; },
+          uploading: function () { return this.pendingUploads > 0; }
+        },
+        created: function () {
+          this.fetchCategories();
+          this.fetchItems();
+        },
+        methods: {
+          fetchCategories: function () {
+            var self = this;
+            axios.get('/categories/list-for-items').then(function (res) { self.categories = res.data; });
+          },
+          fetchItems: function () {
+            var self = this;
+            var params = {};
+            if (this.filter.categoryId) params.categoryId = this.filter.categoryId;
+            if (this.filter.keyword) params.keyword = this.filter.keyword;
+            if (this.filter.status) params.status = this.filter.status;
+            axios.get('/items/list', { params: params }).then(function (res) { self.items = res.data; })
+              .catch(function () { self.$message.error(self.i18n.loadFailed); });
+          },
+          onKeywordInput: function () {
+            var self = this;
+            if (this.keywordTimer) clearTimeout(this.keywordTimer);
+            this.keywordTimer = setTimeout(function () { self.fetchItems(); }, 300);
+          },
+          categoryName: function (id) {
+            var found = this.categories.find(function (c) { return c.id === id; });
+            return found ? found.name : id;
+          },
+          optionsSummary: function (group) {
+            if (!group.options) return [];
+            var enabled = group.options.filter(function (o) { return o.status !== 'DISABLED'; });
+            return enabled.length > 0 ? enabled : group.options;
+          },
+          primaryImagePath: function (row) {
+            var paths = this.imagePaths(row);
+            return paths.length > 0 ? paths[0] : '';
+          },
+          imagePaths: function (row) {
+            if (row.images && row.images.length > 0) {
+              return row.images.map(function (image) { return image.imagePath; })
+                .filter(function (imagePath) { return Boolean(imagePath); });
+            }
+            return row.imagePath ? [row.imagePath] : [];
+          },
+          formImagePaths: function () {
+            return this.form.images.map(function (image) { return image.imagePath; });
+          },
+          normalizeImages: function (row) {
+            return this.imagePaths(row).map(function (imagePath, index) {
+              return { imagePath: imagePath, sortOrder: index, uploadOrder: index };
+            });
+          },
+          beforeImageUpload: function (file) {
+            var supportedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (supportedTypes.indexOf(file.type) < 0) {
+              this.$message.error(this.i18n.imageTypeInvalid);
+              return false;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+              this.$message.error(this.i18n.imageTooLarge);
+              return false;
+            }
+            if (this.form.images.length + this.pendingUploads >= this.maxImageCount) {
+              this.$message.warning(this.i18n.imageLimit.replace('{0}', this.maxImageCount));
+              return false;
+            }
+            file.menuItemImageOrder = this.nextImageOrder;
+            this.nextImageOrder += 1;
+            this.pendingUploads += 1;
+            return true;
+          },
+          handleImageUploadSuccess: function (response, file) {
+            this.pendingUploads = Math.max(0, this.pendingUploads - 1);
+            if (!response || response.success !== true || !response.imagePath) {
+              this.$message.error(this.i18n.imageUploadFailed);
+              return;
+            }
+            this.form.images.push({
+              imagePath: response.imagePath,
+              sortOrder: this.form.images.length,
+              uploadOrder: file && file.raw && typeof file.raw.menuItemImageOrder === 'number'
+                ? file.raw.menuItemImageOrder
+                : this.nextImageOrder
+            });
+            this.form.images.sort(function (left, right) {
+              return left.uploadOrder - right.uploadOrder;
+            });
+            if (!this.uploading) this.reindexImages();
+          },
+          handleImageUploadError: function () {
+            this.pendingUploads = Math.max(0, this.pendingUploads - 1);
+            if (!this.uploading) this.reindexImages();
+            this.$message.error(this.i18n.imageUploadFailed);
+          },
+          setPrimaryImage: function (index) {
+            if (index <= 0 || index >= this.form.images.length) return;
+            var image = this.form.images.splice(index, 1)[0];
+            this.form.images.unshift(image);
+            this.reindexImages();
+          },
+          removeImage: function (index) {
+            this.form.images.splice(index, 1);
+            this.reindexImages();
+          },
+          reindexImages: function () {
+            this.form.images.forEach(function (image, index) {
+              image.sortOrder = index;
+              image.uploadOrder = index;
+            });
+            this.nextImageOrder = this.form.images.length;
+          },
+          addGroup: function () {
+            this.form.groups.push({
+              name: '',
+              required: true,
+              multi: false,
+              sortOrder: this.form.groups.length + 1,
+              options: []
+            });
+          },
+          removeGroup: function (gi) { this.form.groups.splice(gi, 1); },
+          addOption: function (gi) {
+            this.form.groups[gi].options.push({
+              name: '',
+              priceAdjust: 0,
+              sortOrder: this.form.groups[gi].options.length + 1,
+              status: 'ENABLED'
+            });
+          },
+          removeOption: function (gi, oi) { this.form.groups[gi].options.splice(oi, 1); },
+          openDialog: function (row) {
+            var self = this;
+            if (row) {
+              this.editingId = row.id;
+              this.form = {
+                name: row.name,
+                categoryId: row.categoryId,
+                price: row.price,
+                unit: row.unit || '',
+                description: row.description || '',
+                sortOrder: row.sortOrder,
+                status: row.status,
+                images: this.normalizeImages(row),
+                groups: row.groups && row.groups.length > 0
+                  ? JSON.parse(JSON.stringify(row.groups))
+                  : []
+              };
+            } else {
+              this.editingId = null;
+              this.form = {
+                name: '', categoryId: null, price: 0, unit: '',
+                description: '', sortOrder: 0, status: 'ENABLED', images: [], groups: []
+              };
+            }
+            this.nextImageOrder = this.form.images.length;
+            this.dialogVisible = true;
+            this.$nextTick(function () {
+              if (self.$refs.formRef) self.$refs.formRef.clearValidate();
+            });
+          },
+          handleSave: function () {
+            var self = this;
+            if (this.uploading) {
+              this.$message.warning(this.i18n.waitForUpload);
+              return;
+            }
+            this.$refs.formRef.validate(function (valid) {
+              if (!valid) return;
+              self.saving = true;
+              var payload = {
+                name: self.form.name,
+                categoryId: self.form.categoryId,
+                price: self.form.price,
+                unit: self.form.unit,
+                description: self.form.description,
+                sortOrder: self.form.sortOrder,
+                status: self.form.status,
+                imagePath: self.form.images.length > 0 ? self.form.images[0].imagePath : null,
+                images: self.form.images.map(function (image, index) {
+                  return { imagePath: image.imagePath, sortOrder: index };
+                }),
+                groups: self.form.groups.length > 0 ? self.form.groups : null
+              };
+              var promise = self.editingId
+                ? axios.put('/items/' + self.editingId, payload)
+                : axios.post('/items', payload);
+              promise.then(function (res) {
+                if (res.data.success) {
+                  self.$message.success(self.editingId ? self.i18n.updated : self.i18n.created);
+                  self.dialogVisible = false;
+                  self.fetchItems();
+                }
+              }).catch(function () { self.$message.error(self.i18n.operationFailed); })
+                .finally(function () { self.saving = false; });
+            });
+          },
+          closeDialog: function () {
+            if (this.uploading) {
+              this.$message.warning(this.i18n.waitForUpload);
+              return;
+            }
+            this.dialogVisible = false;
+          },
+          handleDialogClose: function (done) {
+            if (this.uploading) {
+              this.$message.warning(this.i18n.waitForUpload);
+              return;
+            }
+            done();
+          },
+          resetUploadState: function () {
+            this.pendingUploads = 0;
+            this.nextImageOrder = this.form.images.length;
+          },
+          toggleStatus: function (row, status) {
+            var self = this;
+            var enabling = status === 'ENABLED';
+            var confirmMessage = enabling ? this.i18n.listConfirm : this.i18n.unlistConfirm;
+            this.$confirm(confirmMessage.replace('{0}', row.name), this.i18n.confirmTitle, {
+              confirmButtonText: this.i18n.confirm, cancelButtonText: this.i18n.cancel, type: 'warning'
+            }).then(function () {
+              axios.post('/items/batch-status', { ids: [row.id], status: status }).then(function (res) {
+                if (res.data.success) { self.$message.success(enabling ? self.i18n.listed : self.i18n.unlisted); self.fetchItems(); }
+              }).catch(function () { self.$message.error(enabling ? self.i18n.listFailed : self.i18n.unlistFailed); });
+            }).catch(function () {});
+          }
+        }
+      });
+    </script>
+  </main>
+</body>
+</html>

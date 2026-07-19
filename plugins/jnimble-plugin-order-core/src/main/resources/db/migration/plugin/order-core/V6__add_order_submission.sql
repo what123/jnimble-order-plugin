@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS ord_order_submission (
+    id                  BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id            BIGINT        NOT NULL,
+    batch_seq           INT           NOT NULL,
+    batch_type          VARCHAR(20)   NOT NULL COMMENT 'INITIAL, ADD_ON',
+    source_type         VARCHAR(50)   NOT NULL COMMENT 'STAFF_POS, CUSTOMER_SCAN, SELF_SERVICE or plugin source',
+    confirmation_mode   VARCHAR(20)   NOT NULL COMMENT 'AUTO, STAFF',
+    status              VARCHAR(20)   NOT NULL COMMENT 'PENDING, CONFIRMED, RETURNED, CANCELLED',
+    idempotency_key     VARCHAR(100)  NOT NULL,
+    submitted_by        VARCHAR(100)  NULL,
+    submitted_at        DATETIME      NOT NULL,
+    confirmed_by        VARCHAR(100)  NULL,
+    confirmed_at        DATETIME      NULL,
+    returned_by         VARCHAR(100)  NULL,
+    returned_at         DATETIME      NULL,
+    return_reason       VARCHAR(500)  NULL,
+    created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_ord_submission_idempotency (idempotency_key),
+    INDEX idx_ord_submission_status_time (status, submitted_at),
+    INDEX idx_ord_submission_order_batch (order_id, batch_seq)
+) COMMENT 'Order submission batches awaiting automatic or staff confirmation';

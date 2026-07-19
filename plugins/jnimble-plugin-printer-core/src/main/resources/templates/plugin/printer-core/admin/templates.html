@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{printer-core.templates.title}">Print Templates</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+  <link rel="stylesheet" th:href="@{/assets/plugins/printer-core/printer.css}">
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{printer-core.templates.title}">Print Templates</h1>
+  <main layout:fragment="content">
+    <div id="app-print-templates" class="print-template-list" v-cloak>
+      <div class="print-template-list__toolbar">
+        <el-button type="primary" icon="el-icon-plus" @click="openCreateDialog" th:text="#{printer-core.templates.create}">New Template</el-button>
+        <el-button icon="el-icon-refresh" @click="fetchTemplates" :loading="loading" th:text="#{printer-core.common.refresh}">Refresh</el-button>
+      </div>
+
+      <el-table :data="templates" v-loading="loading" border stripe empty-text="No print templates" th:attr="empty-text=#{printer-core.templates.empty}">
+        <el-table-column prop="name" label="Template Name" min-width="180" th:attr="label=#{printer-core.templates.name}"></el-table-column>
+        <el-table-column prop="code" label="Code" min-width="160" th:attr="label=#{printer-core.templates.code}"></el-table-column>
+        <el-table-column label="Paper Width" width="110" align="center" th:attr="label=#{printer-core.templates.paperWidth}">
+          <template slot-scope="scope">{{ scope.row.paperWidthMm }}mm</template>
+        </el-table-column>
+        <el-table-column label="Status" width="110" align="center" th:attr="label=#{printer-core.templates.status}">
+          <template slot-scope="scope">
+            <el-tag :type="scope.row.status === 'PUBLISHED' ? 'success' : 'info'" size="small">
+              {{ scope.row.status === 'PUBLISHED' ? i18n.published : i18n.draft }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="Published Version" width="130" align="center" th:attr="label=#{printer-core.templates.publishedVersion}">
+          <template slot-scope="scope">
+            {{ scope.row.publishedVersion ? 'v' + scope.row.publishedVersion : '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="draftRevision" label="Draft Revision" width="120" align="center" th:attr="label=#{printer-core.templates.draftRevision}"></el-table-column>
+        <el-table-column label="Actions" width="120" align="center" fixed="right" th:attr="label=#{printer-core.common.actions}">
+          <template slot-scope="scope">
+            <el-button type="text" icon="el-icon-edit" @click="editTemplate(scope.row)" th:text="#{printer-core.common.edit}">Edit</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-dialog title="New Print Template" th:attr="title=#{printer-core.templates.create}"
+                 :visible.sync="createDialogVisible"
+                 width="460px"
+                 :close-on-click-modal="false">
+        <el-form ref="createForm" :model="createForm" :rules="createRules" label-width="88px">
+          <el-form-item label="Template Name" prop="name" th:attr="label=#{printer-core.templates.name}">
+            <el-input v-model.trim="createForm.name" maxlength="128" placeholder="e.g. Front Desk Receipt" th:attr="placeholder=#{printer-core.templates.namePlaceholder}"></el-input>
+          </el-form-item>
+          <el-form-item label="Template Code" prop="code" th:attr="label=#{printer-core.templates.code}">
+            <el-input v-model.trim="createForm.code" maxlength="64" placeholder="e.g. receipt-frontdesk" th:attr="placeholder=#{printer-core.templates.codePlaceholder}"></el-input>
+          </el-form-item>
+          <el-form-item label="Paper Width" prop="paperWidthMm" th:attr="label=#{printer-core.templates.paperWidth}">
+            <el-radio-group v-model="createForm.paperWidthMm">
+              <el-radio-button :label="58">58mm</el-radio-button>
+              <el-radio-button :label="80">80mm</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
+        <span slot="footer">
+          <el-button @click="createDialogVisible = false" th:text="#{printer-core.common.cancel}">Cancel</el-button>
+          <el-button type="primary" :loading="creating" @click="createTemplate" th:text="#{printer-core.templates.createAndEdit}">Create and Edit</el-button>
+        </span>
+      </el-dialog>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+    <th:block th:replace="~{fragment/element-locale :: scripts}" />
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script th:inline="javascript">
+      var csrfToken = /*[[${_csrf.token}]]*/ '';
+      var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+
+      axios.defaults.baseURL = '/admin/plugins/printer-core';
+      axios.defaults.headers.common[csrfHeader] = csrfToken;
+
+      new Vue({
+        el: '#app-print-templates',
+        data: {
+          i18n: {
+            published: /*[[#{printer-core.templates.status.PUBLISHED}]]*/ 'Published',
+            draft: /*[[#{printer-core.templates.status.DRAFT}]]*/ 'Draft',
+            nameRequired: /*[[#{printer-core.templates.nameRequired}]]*/ 'Enter a template name',
+            nameTooLong: /*[[#{printer-core.templates.nameTooLong}]]*/ 'Template name cannot exceed 128 characters',
+            codeRequired: /*[[#{printer-core.templates.codeRequired}]]*/ 'Enter a template code',
+            codeInvalid: /*[[#{printer-core.templates.codeInvalid}]]*/ 'Use 2-64 lowercase letters, numbers, dots, hyphens, or underscores',
+            loadFailed: /*[[#{printer-core.templates.loadFailed}]]*/ 'Failed to load print templates',
+            createFailed: /*[[#{printer-core.templates.createFailed}]]*/ 'Failed to create template'
+          },
+          templates: [],
+          loading: false,
+          creating: false,
+          createDialogVisible: false,
+          createForm: {
+            name: '',
+            code: '',
+            paperWidthMm: 58
+          },
+          createRules: {
+            name: [
+              { required: true, message: /*[[#{printer-core.templates.nameRequired}]]*/ 'Enter a template name', trigger: 'blur' },
+              { max: 128, message: /*[[#{printer-core.templates.nameTooLong}]]*/ 'Template name cannot exceed 128 characters', trigger: 'blur' }
+            ],
+            code: [
+              { required: true, message: /*[[#{printer-core.templates.codeRequired}]]*/ 'Enter a template code', trigger: 'blur' },
+              {
+                pattern: /^[a-z0-9][a-z0-9._-]{1,63}$/,
+                message: /*[[#{printer-core.templates.codeInvalid}]]*/ 'Use 2-64 lowercase letters, numbers, dots, hyphens, or underscores',
+                trigger: 'blur'
+              }
+            ]
+          }
+        },
+        created: function () {
+          this.fetchTemplates();
+        },
+        methods: {
+          fetchTemplates: function () {
+            var self = this;
+            this.loading = true;
+            axios.get('/templates/list').then(function (response) {
+              self.templates = response.data;
+            }).catch(function () {
+              self.$message.error(self.i18n.loadFailed);
+            }).finally(function () {
+              self.loading = false;
+            });
+          },
+          openCreateDialog: function () {
+            this.createForm = {
+              name: '',
+              code: 'receipt-' + String(Date.now()).slice(-8),
+              paperWidthMm: 58
+            };
+            this.createDialogVisible = true;
+            this.$nextTick(function () {
+              if (this.$refs.createForm) {
+                this.$refs.createForm.clearValidate();
+              }
+            });
+          },
+          createTemplate: function () {
+            var self = this;
+            this.$refs.createForm.validate(function (valid) {
+              if (!valid) return;
+              self.creating = true;
+              var paperWidth = self.createForm.paperWidthMm;
+              axios.post('/templates', {
+                name: self.createForm.name,
+                code: self.createForm.code,
+                paperWidthMm: paperWidth,
+                definition: {
+                  schemaVersion: 1,
+                  paper: {
+                    widthMm: paperWidth,
+                    dpi: 203,
+                    printableWidthDots: paperWidth === 80 ? 576 : 384
+                  },
+                  rows: [
+                    { id: 'row-1', blocks: [] }
+                  ]
+                }
+              }).then(function (response) {
+                window.location.href = '/admin/plugins/printer-core/templates/'
+                  + response.data.id + '/edit';
+              }).catch(function (error) {
+                self.$message.error(self.i18n.createFailed);
+              }).finally(function () {
+                self.creating = false;
+              });
+            });
+          },
+          editTemplate: function (row) {
+            window.location.href = '/admin/plugins/printer-core/templates/' + row.id + '/edit';
+          },
+          errorMessage: function (error, fallback) {
+            return error.response && error.response.data && error.response.data.message
+              ? error.response.data.message
+              : fallback;
+          }
+        }
+      });
+    </script>
+  </main>
+</body>
+</html>

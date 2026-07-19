@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+    <title th:text="#{order.detail.title}">订单详情</title>
+</head>
+<body>
+<h1 layout:fragment="page-title" th:text="#{order.detail.title}">Order Detail</h1>
+<section layout:fragment="content">
+    <div class="admin-card">
+        <div class="admin-card__header">
+            <a class="admin-btn" th:href="@{/admin/plugins/order-core/orders}" th:text="#{order.backToList}">返回列表</a>
+        </div>
+        <div class="admin-card__body">
+            <div class="admin-detail-grid">
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.no}">订单号</span>
+                    <span class="admin-detail-value" th:text="${order.orderNo}">D202501010001</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.table}">桌号</span>
+                    <span class="admin-detail-value" th:text="${order.tableId}">1</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.partySize}">人数</span>
+                    <span class="admin-detail-value" th:text="${order.partySize}">4</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.status}">状态</span>
+                    <span class="admin-detail-value" th:text="${#messages.msg('order.status.' + order.status)}">DRAFT</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.totalAmount}">总金额</span>
+                    <span class="admin-detail-value" th:text="${order.totalAmount}">0.00</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.finalAmount}">实付金额</span>
+                    <span class="admin-detail-value" th:text="${order.finalAmount}">0.00</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.paymentMethod}">支付方式</span>
+                    <span class="admin-detail-value" th:text="${order.paymentMethod}">-</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.operator}">操作员</span>
+                    <span class="admin-detail-value" th:text="${order.operator}">system</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.createdAt}">下单时间</span>
+                    <span class="admin-detail-value" th:text="${order.createdAt != null} ? ${#temporals.format(order.createdAt, 'yyyy-MM-dd HH:mm')} : '-'">2025-01-01 12:00</span>
+                </div>
+                <div class="admin-detail-item">
+                    <span class="admin-detail-label" th:text="#{order.settledAt}">结账时间</span>
+                    <span class="admin-detail-value" th:text="${order.settledAt != null} ? ${#temporals.format(order.settledAt, 'yyyy-MM-dd HH:mm')} : '-'">-</span>
+                </div>
+            </div>
+
+            <h3 th:text="#{order.items}">菜品明细</h3>
+            <table class="admin-table">
+                <thead>
+                <tr>
+                    <th th:text="#{order.item.name}">菜品</th>
+                    <th th:text="#{order.item.price}">单价</th>
+                    <th th:text="#{order.item.qty}">数量</th>
+                    <th th:text="#{order.item.subtotal}">小计</th>
+                    <th th:text="#{order.item.remark}">备注</th>
+                    <th th:text="#{order.item.status}">状态</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="item : ${items}">
+                    <td th:text="${item.itemName}">菜品名</td>
+                    <td th:text="${item.unitPrice}">0.00</td>
+                    <td th:text="${item.quantity}">1</td>
+                    <td th:text="${item.subtotal}">0.00</td>
+                    <td th:text="${item.remark}">-</td>
+                    <td th:text="${#messages.msg('order.item.status.' + item.status)}">NORMAL</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+</body>
+</html>

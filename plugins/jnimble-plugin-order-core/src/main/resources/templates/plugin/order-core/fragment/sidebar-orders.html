@@ -1,0 +1,6 @@
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'order-orders'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/order-core/orders}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{pos.sidebar.orders}">订单管理</span>
+</a>

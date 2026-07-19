@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "id": "crm",
+  "name": "CRM Plugin",
+  "nameKey": "plugin.crm.name",
+  "description": "Customer management plugin",
+  "descriptionKey": "plugin.crm.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.crm.CrmPluginBoot",
+  "license": {
+    "required": true,
+    "issuer": "jnimble",
+    "productCode": "crm",
+    "policy": "STRICT"
+  },
+  "i18n": {
+    "basename": "i18n/messages"
+  },
+  "admin": {
+    "entry": "/customers",
+    "labelKey": "crm.customer.title",
+    "permission": "crm.customer.view"
+  },
+  "permissions": [
+    {
+      "code": "crm.customer.view",
+      "name": "View customers",
+      "nameKey": "permission.crm.customer.view"
+    }
+  ],
+  "migration": {
+    "enabled": true,
+    "location": "classpath:db/migration/plugin/crm",
+    "table": "flyway_schema_history_crm",
+    "baselineOnMigrate": true,
+    "failOnError": true
+  }
+}

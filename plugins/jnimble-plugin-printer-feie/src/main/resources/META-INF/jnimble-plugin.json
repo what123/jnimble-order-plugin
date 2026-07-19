@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "id": "printer-feie",
+  "name": "Printer Feie Driver Plugin",
+  "nameKey": "plugin.printer-feie.name",
+  "description": "飞鹅云打印 (Feie cloud printing) printer driver",
+  "descriptionKey": "plugin.printer-feie.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.printer.feie.FeiePluginBoot",
+  "dependencies": [
+    {
+      "pluginId": "printer-core",
+      "version": "1.x",
+      "required": true
+    }
+  ],
+  "i18n": {
+    "basename": "i18n/messages"
+  }
+}

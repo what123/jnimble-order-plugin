@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{printer-core.drivers.title}">驱动管理</title>
+  <link rel="stylesheet" th:href="@{/assets/plugins/{pluginId}/printer.css(pluginId=${pluginId})}">
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{printer-core.drivers.title}">驱动管理</h1>
+
+  <main layout:fragment="content">
+    <section class="admin-page-section">
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th th:text="#{printer-core.drivers.id}">驱动 ID</th>
+              <th th:text="#{printer-core.drivers.name}">驱动名称</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr th:each="driver : ${drivers}">
+              <td class="admin-code" th:text="${driver.driverId}">driverId</td>
+              <td th:text="${#strings.containsIgnoreCase(driver.driverId, 'feie') ? #messages.msg('printer-core.driver.feie') : driver.driverName}">Driver Name</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

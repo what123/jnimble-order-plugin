@@ -1,0 +1,14 @@
+<span class="admin-shell__nav-label" th:text="#{admin.layout.section.printing}">打印管理</span>
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'plugin:' + pluginId + ':printers'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/{pluginId}/printers(pluginId=${pluginId})}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{printer-core.sidebar.management}">打印管理</span>
+</a>
+
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'plugin:' + pluginId + ':jobs'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/{pluginId}/jobs(pluginId=${pluginId})}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{printer-core.sidebar.jobs}">打印任务</span>
+</a>

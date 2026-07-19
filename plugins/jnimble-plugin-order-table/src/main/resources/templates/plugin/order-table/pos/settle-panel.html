@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:jn="https://jnimble.com/thymeleaf">
+<body>
+<div th:fragment="settle-panel">
+    <div class="pos-settle-row">
+        <label th:text="#{pos.panel.amount}">应收金额</label>
+        <span id="pos-settle-amount-display" class="pos-settle-amount">0.00</span>
+    </div>
+    <div class="pos-settle-row">
+        <label th:text="#{pos.panel.payment}">支付方式</label>
+        <select id="pos-settle-payment" class="pos-settle-select">
+            <option value="CASH" th:text="#{pos.panel.cash}">现金</option>
+        </select>
+    </div>
+    <div class="pos-settle-row">
+        <label th:text="#{pos.panel.received}">实收金额</label>
+        <input type="number" id="pos-settle-received" class="pos-settle-input"
+               step="0.01" min="0" th:placeholder="#{pos.panel.receivedPlaceholder}" placeholder="请输入实收金额" />
+    </div>
+    <div class="pos-settle-row">
+        <label th:text="#{pos.panel.change}">找零</label>
+        <span id="pos-settle-change" class="pos-settle-change">0.00</span>
+    </div>
+    <div class="pos-settle-actions">
+        <button type="button" class="pos-btn pos-btn-default" th:text="#{pos.panel.cancel}" onclick="document.getElementById('pos-settle-overlay').style.display='none'">取消</button>
+        <button type="button" id="pos-settle-confirm-btn" class="pos-btn pos-btn-danger" th:text="#{pos.panel.confirm}">确认收款</button>
+    </div>
+</div>
+</body>
+</html>

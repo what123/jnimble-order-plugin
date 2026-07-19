@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{payment.diagnostics.detailTitle}">支付诊断详情</title>
+  <link rel="stylesheet" th:href="@{/assets/plugins/{pluginId}/payment.css(pluginId=${pluginId})}">
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{payment.diagnostics.detailTitle}">支付诊断详情</h1>
+
+  <main layout:fragment="content">
+    <section class="admin-page-section">
+      <div class="admin-page-section__header">
+        <div>
+          <p class="admin-shell__eyebrow" th:text="#{plugin.payment.name}">收银</p>
+          <h2 th:text="${event.id}">event-id</h2>
+        </div>
+        <a class="admin-btn" th:href="@{/admin/plugins/payment/diagnostics}" th:text="#{payment.diagnostics.back}">返回列表</a>
+      </div>
+
+      <section class="admin-panel payment-diagnostic-meta">
+        <dl>
+          <dt th:text="#{payment.diagnostics.time}">时间</dt>
+          <dd th:text="${event.createdAt}">2026-01-01</dd>
+          <dt th:text="#{payment.diagnostics.eventType}">事件</dt>
+          <dd th:text="${event.eventType}">PAYMENT</dd>
+          <dt th:text="#{payment.diagnostics.paymentId}">支付 ID</dt>
+          <dd class="admin-code" th:text="${event.paymentId}">payment-id</dd>
+          <dt th:text="#{payment.diagnostics.orderId}">订单 ID</dt>
+          <dd class="admin-code" th:text="${event.orderId}">order-id</dd>
+          <dt th:text="#{payment.diagnostics.status}">状态</dt>
+          <dd th:text="${event.status}">SUCCEEDED</dd>
+          <dt th:text="#{payment.diagnostics.error}">错误</dt>
+          <dd th:text="${event.errorMessage ?: '-'}">-</dd>
+        </dl>
+      </section>
+
+      <section class="admin-panel payment-diagnostic-snapshot">
+        <h3 th:text="#{payment.diagnostics.request}">请求快照</h3>
+        <pre th:text="${event.requestSnapshot ?: '-'}">-</pre>
+      </section>
+
+      <section class="admin-panel payment-diagnostic-snapshot">
+        <h3 th:text="#{payment.diagnostics.response}">响应快照</h3>
+        <pre th:text="${event.responseSnapshot ?: '-'}">-</pre>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

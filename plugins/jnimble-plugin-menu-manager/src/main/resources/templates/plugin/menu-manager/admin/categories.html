@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{menu.category.manage}">Manage Categories</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+  <style>
+    [v-cloak] { display: none; }
+    .app-categories { padding: 20px; }
+    .app-categories .el-table { margin-top: 16px; }
+    .el-tag--enabled { background: #f0f9eb; border-color: #e1f3d8; color: #67c23a; }
+    .el-tag--disabled { background: #fef0f0; border-color: #fde2e2; color: #f56c6c; }
+  </style>
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{menu.category.manage}">Manage Categories</h1>
+  <main layout:fragment="content">
+    <div id="app-categories" class="app-categories" v-cloak>
+      <div style="margin-bottom:16px">
+        <el-button type="primary" @click="openDialog(null)" th:text="#{menu.category.create}">New Category</el-button>
+      </div>
+
+      <el-table :data="categories" border stripe style="width: 100%">
+        <el-table-column prop="id" label="ID" width="80" align="center"></el-table-column>
+        <el-table-column prop="name" label="Name" min-width="160" th:attr="label=#{menu.category.name}"></el-table-column>
+        <el-table-column prop="sortOrder" label="Sort Order" width="100" align="center" th:attr="label=#{menu.category.sort}"></el-table-column>
+        <el-table-column label="Status" width="120" align="center" th:attr="label=#{menu.category.status}">
+          <template slot-scope="scope">
+            <el-tag :type="scope.row.status === 'ENABLED' ? 'success' : 'danger'" size="small">
+              {{ scope.row.status === 'ENABLED' ? i18n.enabled : i18n.disabled }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="Actions" width="180" align="center" th:attr="label=#{common.actions}">
+          <template slot-scope="scope">
+            <el-button size="mini" @click="openDialog(scope.row)">{{ i18n.edit }}</el-button>
+            <el-button size="mini" type="danger" @click="handleDelete(scope.row)">{{ i18n.delete }}</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-dialog :title="dialogTitle" :visible.sync="dialogVisible" width="420px" :close-on-click-modal="false">
+        <el-form :model="form" :rules="rules" ref="formRef" label-width="80px">
+          <el-form-item label="Name" prop="name" th:attr="label=#{menu.category.name}">
+            <el-input v-model="form.name" placeholder="Category name" maxlength="100" th:attr="placeholder=#{menu.category.name.placeholder}"></el-input>
+          </el-form-item>
+          <el-form-item label="Sort Order" prop="sortOrder" th:attr="label=#{menu.category.sort}">
+            <el-input-number v-model="form.sortOrder" :min="0" :max="9999"></el-input-number>
+          </el-form-item>
+          <el-form-item label="Status" prop="status" th:attr="label=#{menu.category.status}">
+            <el-radio-group v-model="form.status">
+              <el-radio label="ENABLED">{{ i18n.enabled }}</el-radio>
+              <el-radio label="DISABLED">{{ i18n.disabled }}</el-radio>
+            </el-radio-group>
+          </el-form-item>
+        </el-form>
+        <span slot="footer">
+          <el-button @click="dialogVisible = false" th:text="#{common.cancel}">Cancel</el-button>
+          <el-button type="primary" @click="handleSave" :loading="saving" th:text="#{common.save}">Save</el-button>
+        </span>
+      </el-dialog>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+    <th:block th:replace="~{fragment/element-locale :: scripts}" />
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script th:inline="javascript">
+      var csrfToken = /*[[${_csrf.token}]]*/ '';
+      var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+
+      axios.defaults.baseURL = '/admin/plugins/menu-manager';
+      axios.defaults.headers.common[csrfHeader] = csrfToken;
+
+      new Vue({
+        el: '#app-categories',
+        data: {
+          i18n: {
+            enabled: /*[[#{menu.common.enabled}]]*/ 'Enabled',
+            disabled: /*[[#{menu.common.disabled}]]*/ 'Disabled',
+            edit: /*[[#{menu.common.edit}]]*/ 'Edit',
+            delete: /*[[#{menu.common.delete}]]*/ 'Delete',
+            createTitle: /*[[#{menu.category.create}]]*/ 'New Category',
+            editTitle: /*[[#{menu.category.edit}]]*/ 'Edit Category',
+            nameRequired: /*[[#{menu.category.name.required}]]*/ 'Enter a category name',
+            nameTooLong: /*[[#{menu.category.name.tooLong}]]*/ 'Name cannot exceed 100 characters',
+            loadFailed: /*[[#{menu.category.loadFailed}]]*/ 'Failed to load categories',
+            created: /*[[#{menu.category.created}]]*/ 'Category created',
+            updated: /*[[#{menu.category.updated}]]*/ 'Category updated',
+            operationFailed: /*[[#{menu.common.operationFailed}]]*/ 'Operation failed',
+            deleteConfirm: /*[[#{menu.category.deleteConfirm}]]*/ 'Delete category "{0}"?',
+            confirmTitle: /*[[#{menu.common.confirmTitle}]]*/ 'Confirmation',
+            confirm: /*[[#{menu.common.confirm}]]*/ 'Confirm',
+            cancel: /*[[#{common.cancel}]]*/ 'Cancel',
+            deleted: /*[[#{menu.category.deleted}]]*/ 'Category deleted',
+            deleteFailed: /*[[#{menu.category.deleteFailed}]]*/ 'Failed to delete category'
+          },
+          categories: [],
+          dialogVisible: false,
+          editingId: null,
+          saving: false,
+          form: {
+            name: '',
+            sortOrder: 0,
+            status: 'ENABLED'
+          },
+          rules: {
+            name: [
+              { required: true, message: /*[[#{menu.category.name.required}]]*/ 'Enter a category name', trigger: 'blur' },
+              { max: 100, message: /*[[#{menu.category.name.tooLong}]]*/ 'Name cannot exceed 100 characters', trigger: 'blur' }
+            ]
+          }
+        },
+        computed: {
+          dialogTitle: function () {
+            return this.editingId ? this.i18n.editTitle : this.i18n.createTitle;
+          }
+        },
+        created: function () {
+          this.fetchCategories();
+        },
+        methods: {
+          fetchCategories: function () {
+            var self = this;
+            axios.get('/categories/list').then(function (res) {
+              self.categories = res.data;
+            }).catch(function () {
+              self.$message.error(self.i18n.loadFailed);
+            });
+          },
+          openDialog: function (row) {
+            if (row) {
+              this.editingId = row.id;
+              this.form = {
+                name: row.name,
+                sortOrder: row.sortOrder,
+                status: row.status
+              };
+            } else {
+              this.editingId = null;
+              this.form = { name: '', sortOrder: 0, status: 'ENABLED' };
+            }
+            this.dialogVisible = true;
+            this.$nextTick(function () {
+              if (this.$refs.formRef) {
+                this.$refs.formRef.clearValidate();
+              }
+            }.bind(this));
+          },
+          handleSave: function () {
+            var self = this;
+            this.$refs.formRef.validate(function (valid) {
+              if (!valid) return;
+              self.saving = true;
+              var promise;
+              if (self.editingId) {
+                promise = axios.put('/categories/' + self.editingId, self.form);
+              } else {
+                promise = axios.post('/categories', self.form);
+              }
+              promise.then(function (res) {
+                if (res.data.success) {
+                  self.$message.success(self.editingId ? self.i18n.updated : self.i18n.created);
+                  self.dialogVisible = false;
+                  self.fetchCategories();
+                }
+              }).catch(function () {
+                self.$message.error(self.i18n.operationFailed);
+              }).finally(function () {
+                self.saving = false;
+              });
+            });
+          },
+          handleDelete: function (row) {
+            var self = this;
+            this.$confirm(this.i18n.deleteConfirm.replace('{0}', row.name), this.i18n.confirmTitle, {
+              confirmButtonText: this.i18n.confirm,
+              cancelButtonText: this.i18n.cancel,
+              type: 'warning'
+            }).then(function () {
+              axios.delete('/categories/' + row.id).then(function (res) {
+                if (res.data.success) {
+                  self.$message.success(self.i18n.deleted);
+                  self.fetchCategories();
+                }
+              }).catch(function (err) {
+                self.$message.error(self.i18n.deleteFailed);
+              });
+            }).catch(function () {});
+          }
+        }
+      });
+    </script>
+  </main>
+</body>
+</html>

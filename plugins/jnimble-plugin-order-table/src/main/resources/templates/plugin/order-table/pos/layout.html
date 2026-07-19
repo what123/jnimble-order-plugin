@@ -1,0 +1,1611 @@
+<!doctype html>
+<html lang="zh-CN" th:lang="${#locale.toLanguageTag()}"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:jn="https://jnimble.com/thymeleaf">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{pos.title}">Table POS - JNimble POS</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+  <link rel="stylesheet" th:href="@{/assets/plugins/order-table/pos.css}">
+</head>
+<body>
+<div id="tablePosApp" class="table-pos" v-cloak>
+  <header class="table-pos__header">
+    <div class="table-pos__brand">
+      <span class="table-pos__brand-mark" aria-hidden="true">J</span>
+      <div>
+        <strong th:text="#{pos.brand}">Table POS</strong>
+        <span>{{ operator }}</span>
+      </div>
+    </div>
+    <div class="table-pos__header-actions">
+      <el-badge :value="confirmations.length"
+                :hidden="confirmations.length === 0"
+                class="table-pos__confirmation-badge">
+        <el-button icon="el-icon-bell" @click="confirmationDrawerVisible = true">
+          {{ i18n.pendingConfirmation }}
+        </el-button>
+      </el-badge>
+      <el-tooltip :content="i18n.refresh" placement="bottom">
+        <el-button circle icon="el-icon-refresh" :loading="loading" @click="loadAll"></el-button>
+      </el-tooltip>
+      <jn:hook name="pos.order.topbar" />
+      <nav class="table-pos__language" th:attr="aria-label=#{admin.language.label}">
+        <a href="?lang=zh_CN" lang="zh-CN" th:classappend="${#locale.language == 'zh'} ? ' is-active'" th:text="#{admin.language.zh}">中文</a>
+        <a href="?lang=en" lang="en" th:classappend="${#locale.language == 'en'} ? ' is-active'" th:text="#{admin.language.en}">English</a>
+      </nav>
+      <el-button icon="el-icon-back" @click="goBack">{{ i18n.backAdmin }}</el-button>
+    </div>
+  </header>
+
+  <main class="table-pos__workspace" v-loading="loading">
+    <aside class="table-pos__pane table-pos__tables-pane">
+      <div class="table-pos__pane-header">
+        <div>
+          <h2>{{ i18n.tables }}</h2>
+          <span>{{ filteredTables.length }} {{ i18n.tablesUnit }}</span>
+        </div>
+        <el-input v-model.trim="tableKeyword"
+                  size="small"
+                  clearable
+                  prefix-icon="el-icon-search"
+                  :placeholder="i18n.tableSearch"></el-input>
+      </div>
+      <el-radio-group v-model="tableStatusFilter" size="mini" class="table-pos__status-filter">
+        <el-radio-button label="ALL">{{ i18n.all }}</el-radio-button>
+        <el-radio-button label="FREE">{{ i18n.free }}</el-radio-button>
+        <el-radio-button label="OCCUPIED">{{ i18n.occupied }}</el-radio-button>
+        <el-radio-button label="CLEANING">{{ i18n.cleaning }}</el-radio-button>
+      </el-radio-group>
+      <div class="table-pos__table-grid">
+        <article v-for="table in filteredTables"
+                 :key="table.tableId"
+                 class="table-pos__table-tile"
+                 :class="['table-pos__table-tile--' + statusClass(table.status),
+                          { 'table-pos__table-tile--selected': isCurrentTable(table.tableId) }]">
+          <button type="button" class="table-pos__table-main" @click="handleTableClick(table)">
+            <el-badge :value="tablePendingCount(table)"
+                      :hidden="tablePendingCount(table) === 0"
+                      class="table-pos__table-pending-badge">
+              <span class="table-pos__table-title">{{ table.tableName }}</span>
+            </el-badge>
+            <el-tag size="mini" effect="plain" :type="statusTagType(table.status)">
+              {{ statusText(table.status) }}
+            </el-tag>
+            <span class="table-pos__table-meta">
+              {{ table.occupiedSeats }}/{{ table.maxPartySize }} {{ i18n.guestsUnit }}
+              <template v-if="table.sessions.length"> · {{ money(tableAmount(table)) }}</template>
+            </span>
+            <span v-if="table.sessions.length > 1" class="table-pos__shared-count">
+              {{ table.sessions.length }} {{ i18n.sharedGroupsUnit }}
+            </span>
+          </button>
+          <div class="table-pos__table-actions">
+            <el-button v-if="table.status === 'FREE'"
+                       type="text"
+                       icon="el-icon-circle-plus-outline"
+                       @click="openTableDialog(table, false)">{{ i18n.openTable }}</el-button>
+            <el-button v-if="canShare(table)"
+                       type="text"
+                       icon="el-icon-user"
+                       @click="openTableDialog(table, true)">{{ i18n.shareTable }}</el-button>
+            <el-button v-if="table.status === 'CLEANING'"
+                       type="text"
+                       icon="el-icon-check"
+                       @click="completeCleaning(table)">{{ i18n.completeCleaning }}</el-button>
+          </div>
+        </article>
+        <el-empty v-if="filteredTables.length === 0" :description="i18n.noMatchingTables"></el-empty>
+      </div>
+    </aside>
+
+    <section class="table-pos__pane table-pos__order-pane">
+      <div v-if="!sessionDetail" class="table-pos__empty-state">
+        <i class="el-icon-dish" aria-hidden="true"></i>
+        <h2>{{ i18n.selectTable }}</h2>
+      </div>
+      <template v-else>
+        <div class="table-pos__order-header">
+          <div>
+            <div class="table-pos__order-title">
+              <h2>{{ currentTableNames }}</h2>
+              <el-tag size="small" :type="orderStatusType">{{ orderStatusText }}</el-tag>
+            </div>
+            <p>{{ sessionDetail.session.sessionNo }} · {{ sessionDetail.session.guestCount }} {{ i18n.guestsUnit }} ·
+              {{ sessionDetail.order.orderNo }}</p>
+          </div>
+          <el-dropdown trigger="click" @command="handleSessionCommand">
+            <el-button size="small" icon="el-icon-setting">
+              {{ i18n.tableActions }}<i class="el-icon-arrow-down el-icon--right"></i>
+            </el-button>
+            <el-dropdown-menu slot="dropdown">
+              <el-dropdown-item command="guest" icon="el-icon-user">{{ i18n.changeGuests }}</el-dropdown-item>
+              <el-dropdown-item command="transfer" icon="el-icon-sort">{{ i18n.transferTable }}</el-dropdown-item>
+              <el-dropdown-item command="combine" icon="el-icon-connection">{{ i18n.combineTable }}</el-dropdown-item>
+            </el-dropdown-menu>
+          </el-dropdown>
+        </div>
+
+        <div class="table-pos__order-stage"
+             :class="{ 'is-adding': orderConfirmed && !hasServerPendingConfirmations,
+                       'is-confirming': hasServerPendingConfirmations }">
+          <div class="table-pos__stage-state">
+            <span class="table-pos__stage-icon">
+              <i :class="hasServerPendingConfirmations ? 'el-icon-bell'
+                : (orderConfirmed ? 'el-icon-plus' : 'el-icon-edit-outline')"></i>
+            </span>
+            <div>
+              <strong>{{ currentStageTitle }}</strong>
+              <span>{{ currentStageSummary }}</span>
+            </div>
+          </div>
+          <div v-if="orderConfirmed || hasServerPendingConfirmations" class="table-pos__stage-count">
+            <span>{{ hasServerPendingConfirmations ? i18n.waitingProcessing : i18n.selectedThisTime }}</span>
+            <strong>{{ hasServerPendingConfirmations ? (currentConfirmations.length + ' ' + i18n.ordersUnit)
+              : (pendingItemQuantityTotal + ' ' + i18n.servingsUnit) }}</strong>
+          </div>
+        </div>
+
+        <div class="table-pos__order-list">
+          <section v-for="confirmation in currentConfirmations"
+                   :key="'server-confirmation-' + confirmation.submissionId"
+                   class="table-pos__server-confirmation">
+            <header class="table-pos__server-confirmation-header">
+              <div>
+                <el-tag type="danger" size="mini">{{ i18n.waitingStaffConfirmation }}</el-tag>
+                <strong>{{ batchTypeText(confirmation.batchType, confirmation.batchSeq) }}</strong>
+                <span>{{ sourceText(confirmation.sourceType) }} · {{ waitingText(confirmation.submittedAt) }}</span>
+              </div>
+              <strong>¥{{ money(confirmation.amount) }}</strong>
+            </header>
+            <div class="table-pos__order-columns" aria-hidden="true">
+              <span>{{ i18n.customerSubmittedItems }}</span>
+              <span>{{ i18n.quantity }}</span>
+              <span>{{ i18n.subtotal }}</span>
+              <span></span>
+            </div>
+            <div v-for="item in confirmation.items"
+                 :key="'server-item-' + confirmation.submissionId + '-' + item.itemId"
+                 class="table-pos__order-row is-pending-confirmation">
+              <div class="table-pos__item-info">
+                <strong class="table-pos__item-name">{{ item.itemName }}</strong>
+                <span v-if="item.specification" class="table-pos__item-note">{{ item.specification }}</span>
+                <span v-if="item.remark" class="table-pos__item-remark">{{ i18n.remark }}: {{ item.remark }}</span>
+                <span class="table-pos__unit-price">{{ i18n.unitPrice }} ¥{{ money(item.unitPrice) }}</span>
+              </div>
+              <span class="table-pos__quantity-static">× {{ item.quantity }}</span>
+              <strong class="table-pos__row-subtotal">¥{{ money(item.subtotal) }}</strong>
+              <span class="table-pos__row-waiting"><i class="el-icon-time"></i></span>
+            </div>
+            <footer class="table-pos__server-confirmation-actions">
+              <template v-if="canConfirmOrders">
+                <el-button size="small"
+                           :disabled="actionLoading"
+                           @click="returnConfirmation(confirmation)">{{ i18n.returnOrder }}</el-button>
+                <el-button type="primary"
+                           size="small"
+                           icon="el-icon-check"
+                           :loading="actionLoading"
+                           @click="confirmSubmission(confirmation)">{{ i18n.acceptOrder }}</el-button>
+              </template>
+              <span v-else>{{ i18n.noConfirmPermission }}</span>
+            </footer>
+          </section>
+
+          <section v-if="orderConfirmed && !hasServerPendingConfirmations"
+                   class="table-pos__pending-section"
+                   :class="{ 'is-empty': pendingItems.length === 0 }">
+            <header class="table-pos__pending-header">
+              <div>
+                <span class="table-pos__pending-dot" aria-hidden="true"></span>
+                <div>
+                  <strong>{{ i18n.currentAdditions }}</strong>
+                  <span>{{ pendingItems.length ? (pendingItems.length + ' ' + i18n.itemKindsUnit + ' · ' + pendingItemQuantityTotal + ' ' + i18n.servingsUnit) : i18n.noItemsSelected }}</span>
+                </div>
+              </div>
+              <strong>¥{{ money(pendingAmount) }}</strong>
+            </header>
+            <div v-if="!pendingItems.length" class="table-pos__pending-empty">
+              <i class="el-icon-plus" aria-hidden="true"></i>
+              <span>{{ i18n.currentAdditionsEmpty }}</span>
+            </div>
+            <div v-for="(pi, idx) in pendingItems" :key="'p' + idx" class="table-pos__pending-row">
+              <div class="table-pos__pending-info">
+                <strong class="table-pos__item-name">{{ pi.itemName }}</strong>
+                <span v-if="pi.specification" class="table-pos__item-note">{{ pi.specification }}</span>
+                <span v-if="pi.remark" class="table-pos__item-remark">{{ i18n.remark }}: {{ pi.remark }}</span>
+              </div>
+              <div class="table-pos__quantity">
+                <el-button circle size="mini" icon="el-icon-minus"
+                           :disabled="actionLoading"
+                           @click="pendingItemQuantity(idx, -1)"></el-button>
+                <span>{{ pi.quantity }}</span>
+                <el-button circle size="mini" icon="el-icon-plus"
+                           :disabled="actionLoading"
+                           @click="pendingItemQuantity(idx, 1)"></el-button>
+              </div>
+              <span class="table-pos__pending-price">¥{{ money(pi.unitPrice * pi.quantity) }}</span>
+              <el-tooltip :content="i18n.removeFromAdditions" placement="top">
+                <el-button type="text" icon="el-icon-delete" class="table-pos__danger-icon"
+                           :disabled="actionLoading"
+                           @click="removePendingItem(idx)"></el-button>
+              </el-tooltip>
+            </div>
+          </section>
+
+          <section v-for="group in groupedItems" :key="group.batchSeq" class="table-pos__batch-group">
+            <header class="table-pos__batch-header">
+              <div>
+                <el-tag :type="group.batchSeq === 0 && !orderConfirmed ? 'warning' : 'success'" size="mini">
+                  {{ group.label }}
+                </el-tag>
+                <span>{{ itemQuantity(group.items) }} {{ i18n.servingsUnit }}</span>
+              </div>
+              <strong>¥{{ money(itemAmount(group.items)) }}</strong>
+            </header>
+            <div class="table-pos__order-columns" aria-hidden="true">
+              <span>{{ i18n.item }}</span>
+              <span>{{ i18n.quantity }}</span>
+              <span>{{ i18n.subtotal }}</span>
+              <span></span>
+            </div>
+            <div v-for="item in group.items" :key="item.id" class="table-pos__order-row">
+              <div class="table-pos__item-info">
+                <strong class="table-pos__item-name">{{ item.itemName }}</strong>
+                <span v-if="item.specification" class="table-pos__item-note">{{ item.specification }}</span>
+                <span v-if="item.remark" class="table-pos__item-remark">{{ i18n.remark }}: {{ item.remark }}</span>
+                <span class="table-pos__unit-price">{{ i18n.unitPrice }} ¥{{ money(item.unitPrice) }}</span>
+              </div>
+              <div v-if="!orderConfirmed" class="table-pos__quantity">
+                <el-button circle size="mini" icon="el-icon-minus"
+                           :disabled="actionLoading"
+                           @click="changeQuantity(item, -1)"></el-button>
+                <span>{{ item.quantity }}</span>
+                <el-button circle size="mini" icon="el-icon-plus"
+                           :disabled="actionLoading"
+                           @click="changeQuantity(item, 1)"></el-button>
+              </div>
+              <span v-else class="table-pos__quantity-static">× {{ item.quantity }}</span>
+              <strong class="table-pos__row-subtotal">¥{{ money(item.subtotal) }}</strong>
+              <el-tooltip v-if="!orderConfirmed" :content="i18n.removeItem" placement="top">
+                <el-button type="text" icon="el-icon-delete" class="table-pos__danger-icon"
+                           :disabled="actionLoading"
+                           @click="removeOrderItem(item)"></el-button>
+              </el-tooltip>
+              <span v-else class="table-pos__row-locked"><i class="el-icon-check"></i></span>
+            </div>
+          </section>
+          <div v-if="!sessionDetail.items.length && !pendingItems.length" class="table-pos__order-empty">
+            <i class="el-icon-shopping-cart-2" aria-hidden="true"></i>
+            <strong>{{ i18n.orderEmpty }}</strong>
+          </div>
+        </div>
+
+        <footer class="table-pos__order-footer">
+          <div class="table-pos__amounts">
+            <span>{{ i18n.originalAmount }} <strong>{{ money(previewTotalAmount) }}</strong></span>
+            <span>{{ i18n.discountAmount }} <strong>{{ money(sessionDetail.order.discountAmount) }}</strong></span>
+            <span class="table-pos__payable">{{ pendingItems.length ? i18n.estimatedPayable : i18n.amountDue }}
+              <strong>{{ money(previewFinalAmount) }}</strong>
+            </span>
+          </div>
+          <div class="table-pos__order-actions">
+            <el-button v-if="!orderConfirmed && !hasServerPendingConfirmations"
+                       type="primary"
+                       :disabled="sessionDetail.items.length === 0 || actionLoading"
+                       icon="el-icon-check"
+                       @click="confirmCurrentOrder">{{ i18n.confirmOrder }}</el-button>
+            <el-button v-if="orderConfirmed && pendingItems.length && !hasServerPendingConfirmations"
+                       type="warning"
+                       icon="el-icon-upload2"
+                       :loading="actionLoading"
+                       @click="submitPendingItems">{{ i18n.confirmAdditions }} · {{ pendingItemQuantityTotal }} {{ i18n.servingsUnit }}</el-button>
+            <el-button v-if="orderConfirmed && (!pendingItems.length || hasServerPendingConfirmations)"
+                       :disabled="true"
+                       icon="el-icon-check">{{ i18n.orderSubmitted }}</el-button>
+            <el-button type="primary"
+                       icon="el-icon-wallet"
+                       :disabled="!orderConfirmed || actionLoading || pendingItems.length > 0 || hasServerPendingConfirmations"
+                       @click="openCheckoutDialog">{{ i18n.checkout }}</el-button>
+          </div>
+        </footer>
+      </template>
+    </section>
+
+    <aside class="table-pos__pane table-pos__menu-pane">
+      <div class="table-pos__pane-header table-pos__menu-header">
+        <div>
+          <h2>{{ orderConfirmed ? i18n.addItems : i18n.orderItems }}</h2>
+          <span>{{ filteredMenuItems.length }} {{ i18n.itemsUnit }}</span>
+        </div>
+        <el-input v-model.trim="menuKeyword"
+                  size="small"
+                  clearable
+                  prefix-icon="el-icon-search"
+                  :placeholder="i18n.searchItems"></el-input>
+      </div>
+      <div class="table-pos__categories">
+        <el-radio-group v-model="selectedCategoryId" size="mini">
+          <el-radio-button :label="null">{{ i18n.all }}</el-radio-button>
+          <el-radio-button v-for="category in catalog.categories"
+                           :key="category.id"
+                           :label="category.id">{{ category.name }}</el-radio-button>
+        </el-radio-group>
+      </div>
+      <div class="table-pos__menu-grid">
+        <article v-for="item in filteredMenuItems"
+                 :key="item.id"
+                 class="table-pos__menu-item"
+                 :class="{ 'is-selected': menuPendingQuantity(item.id) > 0 }">
+          <button type="button" class="table-pos__menu-main"
+                  :disabled="!sessionDetail || actionLoading || hasServerPendingConfirmations"
+                  @click="quickAddItem(item)">
+            <span class="table-pos__menu-media">
+              <el-image v-if="primaryImage(item)"
+                        :src="primaryImage(item)"
+                        fit="cover"
+                        class="table-pos__menu-image">
+                <div slot="error" class="table-pos__image-placeholder"><i class="el-icon-dish"></i></div>
+              </el-image>
+              <span v-else class="table-pos__image-placeholder"><i class="el-icon-dish"></i></span>
+              <span v-if="menuPendingQuantity(item.id)" class="table-pos__menu-selected-count">
+                {{ i18n.thisTime }} ×{{ menuPendingQuantity(item.id) }}
+              </span>
+            </span>
+            <span class="table-pos__menu-body">
+              <strong class="table-pos__menu-name">{{ item.name }}</strong>
+              <span class="table-pos__menu-footer">
+                <b>¥{{ money(item.price) }}</b>
+                <span v-if="item.groups && item.groups.length" class="table-pos__menu-spec">
+                  <i class="el-icon-s-operation"></i> {{ i18n.specification }}
+                </span>
+                <span v-else class="table-pos__menu-add" :aria-label="i18n.addToOrder">
+                  <i class="el-icon-plus"></i>
+                </span>
+              </span>
+            </span>
+          </button>
+        </article>
+        <el-empty v-if="filteredMenuItems.length === 0" :description="i18n.noMatchingItems"></el-empty>
+      </div>
+    </aside>
+  </main>
+
+  <el-drawer :title="i18n.pendingOrders"
+             :visible.sync="confirmationDrawerVisible"
+             direction="rtl"
+             size="520px"
+             custom-class="table-pos__confirmation-drawer">
+    <div class="table-pos__confirmation-drawer-body">
+      <div class="table-pos__confirmation-summary">
+        <div>
+          <strong>{{ confirmations.length }}</strong>
+          <span>{{ i18n.ordersWaiting }}</span>
+        </div>
+        <el-button circle
+                   icon="el-icon-refresh"
+                   :loading="confirmationLoading"
+                   @click="loadConfirmations(false)"></el-button>
+      </div>
+      <article v-for="confirmation in confirmations"
+               :key="confirmation.submissionId"
+               class="table-pos__confirmation-card">
+        <header>
+          <div>
+            <strong>{{ confirmation.tableNames.join(' + ') || i18n.unknownTable }}</strong>
+            <span>{{ confirmation.orderNo }} · {{ waitingText(confirmation.submittedAt) }}</span>
+          </div>
+          <el-tag :type="confirmation.batchType === 'INITIAL' ? 'danger' : 'warning'" size="small">
+            {{ batchTypeText(confirmation.batchType, confirmation.batchSeq) }}
+          </el-tag>
+        </header>
+        <div class="table-pos__confirmation-meta">
+          <span><i class="el-icon-user"></i>{{ sourceText(confirmation.sourceType) }}</span>
+          <span>{{ confirmation.itemKinds }} {{ i18n.itemKindsUnit }} · {{ confirmation.quantity }} {{ i18n.servingsUnit }}</span>
+          <strong>¥{{ money(confirmation.amount) }}</strong>
+        </div>
+        <div class="table-pos__confirmation-items">
+          <div v-for="item in confirmation.items" :key="item.itemId">
+            <span>
+              <strong>{{ item.itemName }}</strong>
+              <small v-if="item.specification">{{ item.specification }}</small>
+              <small v-if="item.remark" class="is-remark">{{ i18n.remark }}: {{ item.remark }}</small>
+            </span>
+            <b>× {{ item.quantity }}</b>
+          </div>
+        </div>
+        <footer>
+          <el-button size="small"
+                     icon="el-icon-view"
+                     @click="showConfirmationSession(confirmation)">{{ i18n.viewTable }}</el-button>
+          <template v-if="canConfirmOrders">
+            <el-button size="small"
+                       :disabled="actionLoading"
+                       @click="returnConfirmation(confirmation)">{{ i18n.returnOrder }}</el-button>
+            <el-button type="primary"
+                       size="small"
+                       icon="el-icon-check"
+                       :loading="actionLoading"
+                       @click="confirmSubmission(confirmation)">{{ i18n.acceptOrder }}</el-button>
+          </template>
+        </footer>
+      </article>
+      <el-empty v-if="confirmations.length === 0" :description="i18n.noPendingOrders"></el-empty>
+    </div>
+  </el-drawer>
+
+  <el-dialog :title="openMode === 'share' ? i18n.shareAndOpen : i18n.openTable"
+             :visible.sync="openDialogVisible"
+             width="420px"
+             :close-on-click-modal="false">
+    <el-form label-position="top" size="small">
+      <el-form-item :label="i18n.table">
+        <el-input :value="pendingTable ? pendingTable.tableName : ''" disabled></el-input>
+      </el-form-item>
+      <el-form-item :label="i18n.guestCount">
+        <el-input-number v-model="openForm.guestCount"
+                         :min="pendingTable ? pendingTable.minPartySize : 1"
+                         :max="pendingTable ? Math.max(1, pendingTable.availableSeats) : 1"
+                         controls-position="right"></el-input-number>
+      </el-form-item>
+      <el-form-item :label="i18n.sessionRemark">
+        <el-input v-model.trim="openForm.remark" maxlength="500" type="textarea" :rows="2"></el-input>
+      </el-form-item>
+    </el-form>
+    <span slot="footer">
+      <el-button @click="openDialogVisible = false">{{ i18n.cancel }}</el-button>
+      <el-button type="primary" :loading="actionLoading" @click="submitOpenTable">{{ i18n.confirmOpen }}</el-button>
+    </span>
+  </el-dialog>
+
+  <el-dialog :title="i18n.selectSharedParty" :visible.sync="sessionChooserVisible" width="520px">
+    <div class="table-pos__session-choices">
+      <button v-for="session in sessionChoices"
+              :key="session.sessionId"
+              type="button"
+              @click="selectSession(session.sessionId)">
+        <strong>{{ session.sessionNo }}</strong>
+        <span>{{ session.guestCount }} {{ i18n.guestsUnit }} · {{ session.orderNo }}</span>
+        <b>{{ money(session.amount) }}</b>
+      </button>
+    </div>
+  </el-dialog>
+
+  <el-dialog :title="itemForm.item ? itemForm.item.name : i18n.addItem"
+             :visible.sync="itemDialogVisible"
+             width="540px"
+             :close-on-click-modal="false">
+    <el-form v-if="itemForm.item" label-position="top" size="small">
+      <div class="table-pos__item-dialog-summary">
+        <el-image v-if="primaryImage(itemForm.item)"
+                  :src="primaryImage(itemForm.item)"
+                  fit="cover"></el-image>
+        <span v-else class="table-pos__image-placeholder"><i class="el-icon-dish"></i></span>
+        <div>
+          <strong>{{ itemForm.item.name }}</strong>
+          <span>{{ i18n.basePrice }} ¥{{ money(itemForm.item.price) }}</span>
+        </div>
+        <b>¥{{ money(itemFormTotal) }}</b>
+      </div>
+      <el-form-item v-for="group in itemGroups"
+                    :key="group.id"
+                    :label="group.name + (group.required ? ' (' + i18n.required + ')' : '')">
+        <el-checkbox-group v-if="group.multi" v-model="itemForm.selections[group.id]">
+          <el-checkbox-button v-for="option in enabledOptions(group)"
+                              :key="option.id"
+                              :label="option.id">{{ optionLabel(option) }}</el-checkbox-button>
+        </el-checkbox-group>
+        <el-radio-group v-else v-model="itemForm.selections[group.id]">
+          <el-radio-button v-for="option in enabledOptions(group)"
+                           :key="option.id"
+                           :label="option.id">{{ optionLabel(option) }}</el-radio-button>
+        </el-radio-group>
+      </el-form-item>
+      <div class="table-pos__item-form-row">
+        <el-form-item :label="i18n.quantity">
+          <el-input-number v-model="itemForm.quantity" :min="1" :max="99"
+                           controls-position="right"></el-input-number>
+        </el-form-item>
+        <el-form-item :label="i18n.remark">
+          <el-input v-model.trim="itemForm.remark" maxlength="500" :placeholder="i18n.remarkPlaceholder"></el-input>
+        </el-form-item>
+      </div>
+      <div class="table-pos__item-price-preview">
+        <span>{{ itemForm.quantity }} {{ i18n.servingsUnit }} · {{ i18n.unitPrice }} ¥{{ money(itemFormUnitPrice) }}</span>
+        <strong>{{ i18n.subtotal }} ¥{{ money(itemFormTotal) }}</strong>
+      </div>
+    </el-form>
+    <span slot="footer">
+      <el-button @click="itemDialogVisible = false">{{ i18n.cancel }}</el-button>
+      <el-button type="primary" :loading="actionLoading" @click="submitItem">
+        {{ orderConfirmed ? i18n.addToCurrentAdditions : i18n.addToOrder }}
+      </el-button>
+    </span>
+  </el-dialog>
+
+  <el-dialog :title="i18n.changeGuests" :visible.sync="guestDialogVisible" width="380px">
+    <el-input-number v-model="guestCountForm" :min="1" :max="99" controls-position="right"></el-input-number>
+    <span slot="footer">
+      <el-button @click="guestDialogVisible = false">{{ i18n.cancel }}</el-button>
+      <el-button type="primary" :loading="actionLoading" @click="submitGuestCount">{{ i18n.save }}</el-button>
+    </span>
+  </el-dialog>
+
+  <el-dialog :title="tableActionMode === 'transfer' ? i18n.transferTable : i18n.combineTable"
+             :visible.sync="tableActionVisible"
+             width="460px">
+    <el-select v-model="targetTableId" filterable :placeholder="i18n.selectFreeTable" style="width:100%">
+      <el-option v-for="table in availableActionTables"
+                 :key="table.tableId"
+                 :label="table.tableName + (table.area ? ' · ' + table.area : '')"
+                 :value="table.tableId"></el-option>
+    </el-select>
+    <span slot="footer">
+      <el-button @click="tableActionVisible = false">{{ i18n.cancel }}</el-button>
+      <el-button type="primary" :loading="actionLoading" @click="submitTableAction">{{ i18n.confirm }}</el-button>
+    </span>
+  </el-dialog>
+
+  <el-dialog :title="i18n.checkoutTitle"
+             :visible.sync="checkoutDialogVisible"
+             width="520px"
+             custom-class="table-pos__checkout-dialog"
+             :close-on-click-modal="false">
+    <div class="table-pos__checkout-summary"
+         :class="{ 'table-pos__checkout-summary--single': checkoutForm.method !== 'CASH' }">
+      <div class="table-pos__checkout-amount">
+        <span>{{ i18n.amountDue }}</span>
+        <strong>{{ money(checkoutPayableAmount) }}</strong>
+      </div>
+      <div v-if="checkoutForm.method === 'CASH'"
+           class="table-pos__checkout-change"
+           :class="{ 'table-pos__checkout-change--short': cashPaymentInsufficient }">
+        <span>{{ cashPaymentInsufficient ? i18n.shortageAmount : i18n.changeAmount }}</span>
+        <strong>{{ money(cashPaymentInsufficient ? checkoutShortageAmount : checkoutChangeAmount) }}</strong>
+      </div>
+    </div>
+    <el-form label-position="top" size="small">
+      <el-form-item :label="i18n.paymentMethod">
+        <el-radio-group v-model="checkoutForm.method" class="table-pos__payment-methods">
+          <el-radio-button label="CASH">{{ i18n.cash }}</el-radio-button>
+          <jn:hook name="pos.checkout.methods" />
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item v-if="checkoutForm.method === 'CASH'"
+                    :label="i18n.receivedAmount"
+                    :error="cashPaymentInsufficient ? i18n.receivedInsufficient : ''">
+        <div class="table-pos__cash-entry">
+          <el-input :value="cashInputDisplay"
+                    readonly
+                    class="table-pos__cash-display"
+                    :aria-label="i18n.receivedAmount">
+            <span slot="prefix">¥</span>
+          </el-input>
+          <div class="table-pos__cash-quick">
+            <el-button v-for="amount in cashQuickAmounts"
+                       :key="amount"
+                       size="mini"
+                       :type="cashAmountSelected(amount) ? 'primary' : ''"
+                       @click="setCashReceived(amount)">{{ money(amount) }}</el-button>
+          </div>
+          <div class="table-pos__cash-keypad" role="group" :aria-label="i18n.cashKeypad">
+            <el-button v-for="key in ['7', '8', '9']" :key="key" @click="pressCashKey(key)">{{ key }}</el-button>
+            <el-button class="table-pos__cash-keypad-action"
+                       :aria-label="i18n.backspace"
+                       @click="backspaceCashInput">⌫</el-button>
+
+            <el-button v-for="key in ['4', '5', '6']" :key="key" @click="pressCashKey(key)">{{ key }}</el-button>
+            <el-button class="table-pos__cash-keypad-action" @click="clearCashInput">{{ i18n.clear }}</el-button>
+
+            <el-button v-for="key in ['1', '2', '3']" :key="key" @click="pressCashKey(key)">{{ key }}</el-button>
+            <el-button @click="pressCashKey('00')">00</el-button>
+
+            <el-button class="table-pos__cash-keypad-zero" @click="pressCashKey('0')">0</el-button>
+            <el-button @click="pressCashKey('.')">.</el-button>
+            <el-button type="primary" class="table-pos__cash-keypad-exact"
+                       @click="setCashReceived(checkoutPayableAmount)">{{ i18n.exactAmount }}</el-button>
+          </div>
+        </div>
+      </el-form-item>
+      <jn:hook name="pos.checkout.provider.panel" />
+    </el-form>
+    <span slot="footer">
+      <el-button :disabled="actionLoading" @click="checkoutDialogVisible = false">{{ i18n.cancel }}</el-button>
+      <el-button type="primary"
+                 :loading="actionLoading"
+                 :disabled="checkoutCannotSubmit"
+                 @click="submitCheckout">{{ i18n.confirmPayment }}</el-button>
+    </span>
+  </el-dialog>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+<th:block th:replace="~{fragment/element-locale :: scripts}" />
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script th:inline="javascript">
+  (function () {
+    var csrfToken = /*[[${_csrf.token}]]*/ '';
+    var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    var currentOperator = /*[[${operator}]]*/ 'system';
+    var currentCanConfirmOrders = /*[[${canConfirmOrders}]]*/ false;
+    var posI18n = {
+      pendingConfirmation: /*[[#{pos.confirmation.pending}]]*/ 'Pending',
+      refresh: /*[[#{pos.refresh}]]*/ 'Refresh tables and items',
+      backAdmin: /*[[#{pos.backAdmin}]]*/ 'Back to Admin',
+      tables: /*[[#{pos.tables.title}]]*/ 'Tables',
+      tablesUnit: /*[[#{pos.unit.tables}]]*/ 'tables',
+      tableSearch: /*[[#{pos.tables.search}]]*/ 'Table or area',
+      all: /*[[#{pos.common.all}]]*/ 'All',
+      free: /*[[#{pos.table.status.FREE}]]*/ 'Free',
+      occupied: /*[[#{pos.table.status.OCCUPIED}]]*/ 'Occupied',
+      cleaning: /*[[#{pos.table.status.CLEANING}]]*/ 'Cleaning',
+      guestsUnit: /*[[#{pos.unit.guests}]]*/ 'guests',
+      sharedGroupsUnit: /*[[#{pos.unit.sharedGroups}]]*/ 'shared parties',
+      openTable: /*[[#{pos.open.table}]]*/ 'Open Table',
+      shareTable: /*[[#{pos.table.share}]]*/ 'Share Table',
+      completeCleaning: /*[[#{pos.table.completeCleaning}]]*/ 'Complete Cleaning',
+      noMatchingTables: /*[[#{pos.tables.empty}]]*/ 'No matching tables',
+      selectTable: /*[[#{pos.tables.placeholder}]]*/ 'Select a table to start ordering',
+      tableActions: /*[[#{pos.table.actions}]]*/ 'Table Actions',
+      changeGuests: /*[[#{pos.table.changeGuests}]]*/ 'Change Guests',
+      transferTable: /*[[#{pos.table.transfer}]]*/ 'Transfer Table',
+      combineTable: /*[[#{pos.table.combine}]]*/ 'Combine Tables',
+      waitingProcessing: /*[[#{pos.confirmation.waitingProcessing}]]*/ 'Waiting',
+      selectedThisTime: /*[[#{pos.order.selectedThisTime}]]*/ 'Selected',
+      ordersUnit: /*[[#{pos.unit.orders}]]*/ 'orders',
+      servingsUnit: /*[[#{pos.unit.servings}]]*/ 'servings',
+      waitingStaffConfirmation: /*[[#{pos.confirmation.waitingStaff}]]*/ 'Waiting for Staff',
+      customerSubmittedItems: /*[[#{pos.confirmation.customerItems}]]*/ 'Customer Items',
+      quantity: /*[[#{pos.item.qty}]]*/ 'Qty',
+      subtotal: /*[[#{pos.item.subtotal}]]*/ 'Subtotal',
+      remark: /*[[#{pos.item.remark}]]*/ 'Remark',
+      unitPrice: /*[[#{pos.item.unitPrice}]]*/ 'Unit Price',
+      returnOrder: /*[[#{pos.confirmation.return}]]*/ 'Return',
+      acceptOrder: /*[[#{pos.confirmation.accept}]]*/ 'Accept',
+      noConfirmPermission: /*[[#{pos.confirmation.noPermission}]]*/ 'No permission to confirm orders',
+      currentAdditions: /*[[#{pos.order.currentAdditions}]]*/ 'Current Additions',
+      itemKindsUnit: /*[[#{pos.unit.itemKinds}]]*/ 'items',
+      noItemsSelected: /*[[#{pos.order.noItemsSelected}]]*/ 'No items selected',
+      currentAdditionsEmpty: /*[[#{pos.order.currentAdditionsEmpty}]]*/ 'No additions yet',
+      removeFromAdditions: /*[[#{pos.order.removeFromAdditions}]]*/ 'Remove from additions',
+      item: /*[[#{pos.item.name}]]*/ 'Item',
+      removeItem: /*[[#{pos.remove.item}]]*/ 'Remove Item',
+      orderEmpty: /*[[#{pos.order.empty}]]*/ 'The order is empty',
+      originalAmount: /*[[#{pos.order.originalAmount}]]*/ 'Original Amount',
+      discountAmount: /*[[#{pos.order.discountAmount}]]*/ 'Discount',
+      estimatedPayable: /*[[#{pos.order.estimatedPayable}]]*/ 'Estimated Due',
+      amountDue: /*[[#{pos.panel.amount}]]*/ 'Amount Due',
+      confirmOrder: /*[[#{pos.confirm.order}]]*/ 'Confirm Order',
+      confirmAdditions: /*[[#{pos.order.confirmAdditions}]]*/ 'Confirm Additions',
+      orderSubmitted: /*[[#{pos.order.submitted}]]*/ 'Order Submitted',
+      checkout: /*[[#{pos.settle.order}]]*/ 'Settle',
+      addItems: /*[[#{pos.add.item}]]*/ 'Add Items',
+      orderItems: /*[[#{pos.order.items}]]*/ 'Order',
+      itemsUnit: /*[[#{pos.unit.items}]]*/ 'items',
+      searchItems: /*[[#{pos.items.search}]]*/ 'Search items',
+      thisTime: /*[[#{pos.order.thisTime}]]*/ 'This time',
+      specification: /*[[#{pos.item.specification}]]*/ 'Specification',
+      addToOrder: /*[[#{pos.order.addToOrder}]]*/ 'Add to Order',
+      noMatchingItems: /*[[#{pos.items.empty}]]*/ 'No matching items',
+      pendingOrders: /*[[#{pos.confirmation.title}]]*/ 'Pending Orders',
+      ordersWaiting: /*[[#{pos.confirmation.ordersWaiting}]]*/ 'orders waiting',
+      unknownTable: /*[[#{pos.table.unknown}]]*/ 'Unknown Table',
+      viewTable: /*[[#{pos.confirmation.viewTable}]]*/ 'View Table',
+      noPendingOrders: /*[[#{pos.confirmation.empty}]]*/ 'No pending orders',
+      shareAndOpen: /*[[#{pos.table.shareAndOpen}]]*/ 'Share and Open',
+      table: /*[[#{pos.table.label}]]*/ 'Table',
+      guestCount: /*[[#{pos.table.guestCount}]]*/ 'Guests',
+      sessionRemark: /*[[#{pos.table.sessionRemark}]]*/ 'Session Remark',
+      cancel: /*[[#{pos.panel.cancel}]]*/ 'Cancel',
+      confirmOpen: /*[[#{pos.table.confirmOpen}]]*/ 'Confirm Open',
+      selectSharedParty: /*[[#{pos.table.selectSharedParty}]]*/ 'Select Shared Party',
+      addItem: /*[[#{pos.item.add}]]*/ 'Add Item',
+      basePrice: /*[[#{pos.item.basePrice}]]*/ 'Base Price',
+      required: /*[[#{pos.item.required}]]*/ 'Required',
+      remarkPlaceholder: /*[[#{pos.item.remarkPlaceholder}]]*/ 'Less spicy, allergies, etc.',
+      addToCurrentAdditions: /*[[#{pos.order.addToCurrentAdditions}]]*/ 'Add to Current Additions',
+      save: /*[[#{pos.common.save}]]*/ 'Save',
+      selectFreeTable: /*[[#{pos.table.selectFree}]]*/ 'Select a free table',
+      confirm: /*[[#{pos.common.confirm}]]*/ 'Confirm',
+      checkoutTitle: /*[[#{pos.checkout.title}]]*/ 'Settle Order',
+      shortageAmount: /*[[#{pos.checkout.shortage}]]*/ 'Shortage',
+      changeAmount: /*[[#{pos.panel.change}]]*/ 'Change',
+      paymentMethod: /*[[#{pos.panel.payment}]]*/ 'Payment Method',
+      cash: /*[[#{pos.panel.cash}]]*/ 'Cash',
+      receivedAmount: /*[[#{pos.panel.received}]]*/ 'Amount Received',
+      cashKeypad: /*[[#{pos.checkout.cashKeypad}]]*/ 'Cash amount keypad',
+      clear: /*[[#{pos.checkout.clear}]]*/ 'Clear',
+      backspace: /*[[#{pos.checkout.backspace}]]*/ 'Backspace',
+      exactAmount: /*[[#{pos.checkout.exactAmount}]]*/ 'Exact',
+      receivedInsufficient: /*[[#{pos.checkout.receivedInsufficient}]]*/ 'Amount received cannot be less than amount due',
+      confirmPayment: /*[[#{pos.panel.confirm}]]*/ 'Confirm Payment',
+      statusPendingStaff: /*[[#{pos.order.status.pendingStaff}]]*/ 'Pending Staff Confirmation',
+      statusPending: /*[[#{pos.order.status.pending}]]*/ 'Pending',
+      statusConfirmed: /*[[#{pos.order.status.confirmed}]]*/ 'Submitted',
+      statusSettled: /*[[#{pos.order.status.settled}]]*/ 'Settled',
+      stageCustomerPending: /*[[#{pos.order.stage.customerPending}]]*/ 'Customer Order Pending',
+      stageCurrentAdditions: /*[[#{pos.order.currentAdditions}]]*/ 'Current Additions',
+      stageCurrentOrder: /*[[#{pos.order.stage.currentOrder}]]*/ 'Current Order',
+      summaryWaiting: /*[[#{pos.order.summary.waiting}]]*/ '{0} servings waiting for staff',
+      summarySubmitted: /*[[#{pos.order.summary.submitted}]]*/ '{0} servings submitted',
+      summarySelected: /*[[#{pos.order.summary.selected}]]*/ '{0} servings selected',
+      batchSubmittedItems: /*[[#{pos.batch.submittedItems}]]*/ 'Submitted Items',
+      batchCurrentOrder: /*[[#{pos.batch.currentOrder}]]*/ 'Current Order',
+      batchInitial: /*[[#{pos.batch.initial}]]*/ 'Initial Order',
+      batchAddition: /*[[#{pos.batch.addition}]]*/ 'Addition #{0}',
+      confirmationAccepted: /*[[#{pos.message.confirmationAccepted}]]*/ 'Order confirmed and sent to kitchen',
+      returnReasonPrompt: /*[[#{pos.confirmation.returnReasonPrompt}]]*/ 'Enter the return reason',
+      returnTitle: /*[[#{pos.confirmation.returnTitle}]]*/ 'Return Customer Order',
+      confirmReturn: /*[[#{pos.confirmation.confirmReturn}]]*/ 'Confirm Return',
+      returnReasonPlaceholder: /*[[#{pos.confirmation.returnReasonPlaceholder}]]*/ 'e.g. item sold out or remark needs confirmation',
+      returnReasonRequired: /*[[#{pos.confirmation.returnReasonRequired}]]*/ 'A return reason is required',
+      returned: /*[[#{pos.message.returned}]]*/ 'Order returned',
+      sharedOpened: /*[[#{pos.message.sharedOpened}]]*/ 'Shared table opened',
+      opened: /*[[#{pos.message.opened}]]*/ 'Table opened',
+      addedToCurrent: /*[[#{pos.message.addedToCurrent}]]*/ 'Added to current additions',
+      additionsSubmitted: /*[[#{pos.message.additionsSubmitted}]]*/ 'Additions sent to kitchen',
+      selectAndOpenFirst: /*[[#{pos.message.selectAndOpenFirst}]]*/ 'Select and open a table first',
+      itemAdded: /*[[#{pos.message.itemAdded}]]*/ 'Added {0}',
+      confirmedCannotEdit: /*[[#{pos.message.confirmedCannotEdit}]]*/ 'Submitted items cannot be edited',
+      confirmedCannotRemove: /*[[#{pos.message.confirmedCannotRemove}]]*/ 'Submitted items cannot be removed',
+      removeConfirm: /*[[#{pos.item.removeConfirm}]]*/ 'Remove "{0}" from the order?',
+      removeTitle: /*[[#{pos.item.removeTitle}]]*/ 'Remove Item',
+      orderConfirmed: /*[[#{pos.message.orderConfirmed}]]*/ 'Order confirmed',
+      selectTargetTable: /*[[#{pos.message.selectTargetTable}]]*/ 'Select a target table',
+      transferred: /*[[#{pos.message.transferred}]]*/ 'Table transferred',
+      combined: /*[[#{pos.message.combined}]]*/ 'Tables combined',
+      checkoutSuccess: /*[[#{pos.message.checkoutSuccess}]]*/ 'Payment complete. Change {0}',
+      paymentProcessing: /*[[#{pos.message.paymentProcessing}]]*/ 'Payment is processing. Do not submit again.',
+      cleaningConfirm: /*[[#{pos.table.cleaningConfirm}]]*/ 'Confirm cleaning is complete for "{0}"?',
+      cleaningTitle: /*[[#{pos.table.completeCleaning}]]*/ 'Complete Cleaning',
+      tableAvailable: /*[[#{pos.message.tableAvailable}]]*/ 'Table is now available',
+      selectSpecification: /*[[#{pos.message.selectSpecification}]]*/ 'Select {0}',
+      sourceCustomerScan: /*[[#{pos.source.CUSTOMER_SCAN}]]*/ 'Customer Scan',
+      sourceSelfService: /*[[#{pos.source.SELF_SERVICE}]]*/ 'Self Service',
+      sourceStaffPos: /*[[#{pos.source.STAFF_POS}]]*/ 'Staff POS',
+      sourceExternal: /*[[#{pos.source.EXTERNAL}]]*/ 'External Ordering',
+      justSubmitted: /*[[#{pos.wait.justSubmitted}]]*/ 'Just submitted',
+      waitingMinutes: /*[[#{pos.wait.minutes}]]*/ 'Waiting {0} minutes',
+      waitingHoursMinutes: /*[[#{pos.wait.hoursMinutes}]]*/ 'Waiting {0} hours {1} minutes',
+      statusShared: /*[[#{pos.table.status.SHARED}]]*/ 'Shared',
+      statusChecking: /*[[#{pos.table.status.CHECKING}]]*/ 'Checking Out',
+      statusReserved: /*[[#{pos.table.status.RESERVED}]]*/ 'Reserved',
+      statusDisabled: /*[[#{pos.table.status.DISABLED}]]*/ 'Disabled',
+      statusMaintenance: /*[[#{pos.table.status.MAINTENANCE}]]*/ 'Maintenance',
+      operationFailed: /*[[#{pos.message.operationFailed}]]*/ 'Operation failed'
+    };
+    axios.defaults.baseURL = '/admin/plugins/order-table';
+    axios.defaults.headers.common[csrfHeader] = csrfToken;
+
+    new Vue({
+      el: '#tablePosApp',
+      data: function () {
+        return {
+          i18n: posI18n,
+          operator: currentOperator || 'system',
+          canConfirmOrders: Boolean(currentCanConfirmOrders),
+          loading: false,
+          actionLoading: false,
+          confirmationLoading: false,
+          confirmationDrawerVisible: false,
+          confirmationTimer: null,
+          confirmations: [],
+          board: [],
+          catalog: { categories: [], items: [] },
+          tableKeyword: '',
+          tableStatusFilter: 'ALL',
+          menuKeyword: '',
+          selectedCategoryId: null,
+          sessionDetail: null,
+          pendingTable: null,
+          openMode: 'open',
+          openDialogVisible: false,
+          openForm: { guestCount: 1, remark: '' },
+          sessionChooserVisible: false,
+          sessionChoices: [],
+          itemDialogVisible: false,
+          itemForm: { item: null, selections: {}, quantity: 1, remark: '' },
+          pendingItems: [],
+          guestDialogVisible: false,
+          guestCountForm: 1,
+          tableActionVisible: false,
+          tableActionMode: 'transfer',
+          targetTableId: null,
+          checkoutDialogVisible: false,
+          cashInput: '',
+          checkoutForm: { method: 'CASH', receivedAmount: 0, idempotencyKey: '' }
+        };
+      },
+      computed: {
+        filteredTables: function () {
+          var keyword = this.tableKeyword.toLowerCase();
+          var filter = this.tableStatusFilter;
+          return this.board.filter(function (table) {
+            var matchesKeyword = !keyword || String(table.tableName || '').toLowerCase().indexOf(keyword) >= 0
+              || String(table.area || '').toLowerCase().indexOf(keyword) >= 0;
+            var matchesStatus = filter === 'ALL'
+              || table.status === filter
+              || (filter === 'OCCUPIED' && ['OCCUPIED', 'SHARED', 'CHECKING'].indexOf(table.status) >= 0);
+            return matchesKeyword && matchesStatus;
+          });
+        },
+        filteredMenuItems: function () {
+          var keyword = this.menuKeyword.toLowerCase();
+          var categoryId = this.selectedCategoryId;
+          return this.catalog.items.filter(function (item) {
+            return (categoryId === null || item.categoryId === categoryId)
+              && (!keyword || String(item.name || '').toLowerCase().indexOf(keyword) >= 0);
+          });
+        },
+        currentTableNames: function () {
+          if (!this.sessionDetail) return '';
+          return this.sessionDetail.occupiedTables.map(function (table) {
+            return table.tableName || table.code;
+          }).join(' + ');
+        },
+        orderConfirmed: function () {
+          return this.sessionDetail && this.sessionDetail.order.status === 'CONFIRMED';
+        },
+        orderStatusText: function () {
+          if (!this.sessionDetail) return '';
+          if (this.hasServerPendingConfirmations) return this.i18n.statusPendingStaff;
+          return { DRAFT: this.i18n.statusPending, CONFIRMED: this.i18n.statusConfirmed, SETTLED: this.i18n.statusSettled }[this.sessionDetail.order.status]
+            || this.sessionDetail.order.status;
+        },
+        orderStatusType: function () {
+          if (this.hasServerPendingConfirmations) return 'danger';
+          return this.orderConfirmed ? 'success' : 'warning';
+        },
+        currentConfirmations: function () {
+          if (!this.sessionDetail || !this.sessionDetail.session) return [];
+          var sessionId = String(this.sessionDetail.session.id);
+          return this.confirmations.filter(function (confirmation) {
+            return String(confirmation.sessionId) === sessionId;
+          });
+        },
+        hasServerPendingConfirmations: function () {
+          return this.currentConfirmations.length > 0;
+        },
+        currentStageTitle: function () {
+          if (this.hasServerPendingConfirmations) return this.i18n.stageCustomerPending;
+          return this.orderConfirmed ? this.i18n.stageCurrentAdditions : this.i18n.stageCurrentOrder;
+        },
+        currentStageSummary: function () {
+          if (this.hasServerPendingConfirmations) {
+            var waitingQuantity = this.currentConfirmations.reduce(function (total, confirmation) {
+              return total + Number(confirmation.quantity || 0);
+            }, 0);
+            return this.i18n.summaryWaiting.replace('{0}', waitingQuantity);
+          }
+          return (this.orderConfirmed ? this.i18n.summarySubmitted : this.i18n.summarySelected)
+            .replace('{0}', this.orderItemQuantityTotal);
+        },
+        orderItemQuantityTotal: function () {
+          var self = this;
+          var items = this.sessionDetail && this.sessionDetail.items || [];
+          return this.itemQuantity(items.filter(function (item) {
+            return !self.isServerPendingItem(item);
+          }));
+        },
+        pendingItemQuantityTotal: function () {
+          return this.itemQuantity(this.pendingItems);
+        },
+        pendingAmount: function () {
+          return this.pendingItems.reduce(function (total, item) {
+            return total + Number(item.unitPrice || 0) * Number(item.quantity || 0);
+          }, 0);
+        },
+        previewTotalAmount: function () {
+          if (!this.sessionDetail) return 0;
+          return Number(this.sessionDetail.order.totalAmount || 0) + this.pendingAmount;
+        },
+        previewFinalAmount: function () {
+          if (!this.sessionDetail) return 0;
+          return Number(this.sessionDetail.order.finalAmount || 0) + this.pendingAmount;
+        },
+        checkoutPayableAmount: function () {
+          return this.sessionDetail && this.sessionDetail.order
+            ? Number(this.sessionDetail.order.finalAmount || 0) : 0;
+        },
+        cashReceivedAmount: function () {
+          var amount = Number(this.cashInput);
+          return Number.isFinite(amount) ? amount : 0;
+        },
+        cashInputDisplay: function () {
+          return this.cashInput === '' ? '0' : this.cashInput;
+        },
+        checkoutChangeAmount: function () {
+          return Math.max(this.cashReceivedAmount - this.checkoutPayableAmount, 0);
+        },
+        checkoutShortageAmount: function () {
+          return Math.max(this.checkoutPayableAmount - this.cashReceivedAmount, 0);
+        },
+        cashPaymentInsufficient: function () {
+          return this.checkoutForm.method === 'CASH'
+            && this.cashReceivedAmount + 0.000001 < this.checkoutPayableAmount;
+        },
+        cashQuickAmounts: function () {
+          var amount = Math.round(this.checkoutPayableAmount * 100) / 100;
+          var values = [amount];
+          [10, 20, 50, 100, 200, 500].forEach(function (unit) {
+            var candidate = Math.ceil(amount / unit) * unit;
+            if (candidate <= amount + 0.001) candidate += unit;
+            if (values.indexOf(candidate) < 0) values.push(candidate);
+          });
+          return values.slice(0, 5);
+        },
+        checkoutCannotSubmit: function () {
+          return this.actionLoading || this.cashPaymentInsufficient;
+        },
+        itemGroups: function () {
+          return this.itemForm.item && Array.isArray(this.itemForm.item.groups)
+            ? this.itemForm.item.groups : [];
+        },
+        itemFormUnitPrice: function () {
+          return this.itemForm.item
+            ? this.calculateItemUnitPrice(this.itemForm.item, this.selectedItemOptionIds()) : 0;
+        },
+        itemFormTotal: function () {
+          return this.itemFormUnitPrice * Number(this.itemForm.quantity || 0);
+        },
+        availableActionTables: function () {
+          var currentIds = this.sessionDetail
+            ? this.sessionDetail.occupiedTables.map(function (table) { return table.id; }) : [];
+          return this.board.filter(function (table) {
+            return table.status === 'FREE' && currentIds.indexOf(table.tableId) < 0;
+          });
+        },
+        groupedItems: function () {
+          if (!this.sessionDetail || !this.sessionDetail.items) return [];
+          var groups = {};
+          var pendingSequences = this.currentConfirmations.map(function (confirmation) {
+            return Number(confirmation.batchSeq);
+          });
+          this.sessionDetail.items.forEach(function (item) {
+            var seq = item.batchSeq || 0;
+            if (pendingSequences.indexOf(Number(seq)) >= 0) return;
+            if (!groups[seq]) groups[seq] = [];
+            groups[seq].push(item);
+          });
+          var keys = Object.keys(groups).sort(function (a, b) { return Number(a) - Number(b); });
+          var self = this;
+          var confirmed = this.orderConfirmed;
+          return keys.map(function (key) {
+            var seq = Number(key);
+            var label = seq === 0 ? (confirmed ? self.i18n.batchSubmittedItems : self.i18n.batchCurrentOrder)
+              : (seq === 1 ? self.i18n.batchInitial : self.i18n.batchAddition.replace('{0}', seq));
+            return { batchSeq: seq, label: label, items: groups[key] };
+          });
+        }
+      },
+      created: function () {
+        this.loadAll();
+        var self = this;
+        this.confirmationTimer = window.setInterval(function () {
+          self.loadConfirmations(true);
+        }, 10000);
+      },
+      beforeDestroy: function () {
+        if (this.confirmationTimer) window.clearInterval(this.confirmationTimer);
+      },
+      methods: {
+        loadAll: function () {
+          var self = this;
+          self.loading = true;
+          return Promise.all([
+            axios.get('/pos/board'),
+            axios.get('/pos/catalog'),
+            axios.get('/pos/confirmations')
+          ])
+            .then(function (responses) {
+              self.board = Array.isArray(responses[0].data) ? responses[0].data : [];
+              self.catalog = responses[1].data || { categories: [], items: [] };
+              self.confirmations = Array.isArray(responses[2].data) ? responses[2].data : [];
+            }).catch(self.showError).finally(function () { self.loading = false; });
+        },
+        loadConfirmations: function (silent) {
+          var self = this;
+          if (!silent) self.confirmationLoading = true;
+          return axios.get('/pos/confirmations').then(function (response) {
+            self.confirmations = Array.isArray(response.data) ? response.data : [];
+          }).catch(function (error) {
+            if (!silent) self.showError(error);
+          }).finally(function () { self.confirmationLoading = false; });
+        },
+        activateSession: function (detail) {
+          this.persistPendingItems();
+          this.sessionDetail = detail;
+          this.restorePendingItems();
+        },
+        pendingStorageKey: function () {
+          var sessionId = this.sessionDetail && this.sessionDetail.session
+            ? this.sessionDetail.session.id : null;
+          return sessionId ? 'jnimble.pos.pending.' + sessionId : '';
+        },
+        persistPendingItems: function () {
+          var key = this.pendingStorageKey();
+          if (!key) return;
+          try {
+            if (this.pendingItems.length) {
+              window.sessionStorage.setItem(key, JSON.stringify(this.pendingItems));
+            } else {
+              window.sessionStorage.removeItem(key);
+            }
+          } catch (ignore) {
+            // Browser storage is an optional convenience; ordering still works without it.
+          }
+        },
+        restorePendingItems: function () {
+          var key = this.pendingStorageKey();
+          if (!key) {
+            this.pendingItems = [];
+            return;
+          }
+          try {
+            var value = JSON.parse(window.sessionStorage.getItem(key) || '[]');
+            this.pendingItems = Array.isArray(value) ? value : [];
+          } catch (ignore) {
+            this.pendingItems = [];
+            window.sessionStorage.removeItem(key);
+          }
+        },
+        clearPendingItemsStorage: function () {
+          var key = this.pendingStorageKey();
+          if (key) {
+            try { window.sessionStorage.removeItem(key); } catch (ignore) { /* no-op */ }
+          }
+        },
+        refreshBoard: function () {
+          var self = this;
+          return axios.get('/pos/board').then(function (response) {
+            self.board = Array.isArray(response.data) ? response.data : [];
+          });
+        },
+        loadSession: function (sessionId) {
+          var self = this;
+          self.actionLoading = true;
+          return axios.get('/pos/sessions/' + sessionId).then(function (response) {
+            self.activateSession(response.data);
+            self.sessionChooserVisible = false;
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        showConfirmationSession: function (confirmation) {
+          var self = this;
+          return self.loadSession(confirmation.sessionId).then(function () {
+            self.confirmationDrawerVisible = false;
+          });
+        },
+        confirmSubmission: function (confirmation) {
+          var self = this;
+          self.actionLoading = true;
+          return axios.post('/pos/confirmations/' + confirmation.submissionId + '/confirm', {
+            operator: self.operator
+          }).then(function (response) {
+            if (self.isCurrentSession(response.data)) self.activateSession(response.data);
+            self.$message.success(self.i18n.confirmationAccepted);
+            return Promise.all([self.refreshBoard(), self.loadConfirmations(true)]);
+          }).then(function () {
+            if (!self.confirmations.length) self.confirmationDrawerVisible = false;
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        returnConfirmation: function (confirmation) {
+          var self = this;
+          self.$prompt(self.i18n.returnReasonPrompt, self.i18n.returnTitle, {
+            confirmButtonText: self.i18n.confirmReturn,
+            cancelButtonText: self.i18n.cancel,
+            inputPlaceholder: self.i18n.returnReasonPlaceholder,
+            inputValidator: function (value) {
+              return value && String(value).trim() ? true : self.i18n.returnReasonRequired;
+            }
+          }).then(function (result) {
+            self.actionLoading = true;
+            return axios.post('/pos/confirmations/' + confirmation.submissionId + '/return', {
+              operator: self.operator,
+              reason: String(result.value || '').trim()
+            });
+          }).then(function (response) {
+            if (!response) return;
+            if (self.isCurrentSession(response.data)) self.activateSession(response.data);
+            self.$message.success(self.i18n.returned);
+            return Promise.all([self.refreshBoard(), self.loadConfirmations(true)]);
+          }).then(function () {
+            if (!self.confirmations.length) self.confirmationDrawerVisible = false;
+          }).catch(function (error) {
+            if (error !== 'cancel' && error !== 'close') self.showError(error);
+          }).finally(function () { self.actionLoading = false; });
+        },
+        isCurrentSession: function (detail) {
+          return Boolean(detail && detail.session && this.sessionDetail && this.sessionDetail.session
+            && String(detail.session.id) === String(this.sessionDetail.session.id));
+        },
+        handleTableClick: function (table) {
+          if (table.status === 'FREE') {
+            this.openTableDialog(table, false);
+            return;
+          }
+          if (table.status === 'CLEANING') {
+            this.completeCleaning(table);
+            return;
+          }
+          if (table.sessions.length === 1) {
+            this.loadSession(table.sessions[0].sessionId);
+            return;
+          }
+          if (table.sessions.length > 1) {
+            this.sessionChoices = table.sessions;
+            this.sessionChooserVisible = true;
+          }
+        },
+        selectSession: function (sessionId) {
+          this.loadSession(sessionId);
+        },
+        openTableDialog: function (table, shared) {
+          this.pendingTable = table;
+          this.openMode = shared ? 'share' : 'open';
+          this.openForm = {
+            guestCount: Math.max(table.minPartySize || 1, 1),
+            remark: ''
+          };
+          this.openDialogVisible = true;
+        },
+        submitOpenTable: function () {
+          var self = this;
+          if (!self.pendingTable) return;
+          var path = '/pos/tables/' + self.pendingTable.tableId
+            + (self.openMode === 'share' ? '/share' : '/open');
+          self.actionLoading = true;
+          axios.post(path, {
+            guestCount: self.openForm.guestCount,
+            operator: self.operator,
+            remark: self.openForm.remark
+          }).then(function (response) {
+            self.activateSession(response.data);
+            self.openDialogVisible = false;
+            self.$message.success(self.openMode === 'share' ? self.i18n.sharedOpened : self.i18n.opened);
+            return self.refreshBoard();
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        canShare: function (table) {
+          return ['OCCUPIED', 'SHARED'].indexOf(table.status) >= 0 && table.availableSeats > 0;
+        },
+        quickAddItem: function (item) {
+          if (Array.isArray(item.groups) && item.groups.length > 0) {
+            this.openItemDialog(item);
+            return;
+          }
+          if (this.orderConfirmed) {
+            this.addPendingItem(item, [], 1, '');
+            return;
+          }
+          this.postItem(item, [], 1, '');
+        },
+        openItemDialog: function (item) {
+          var selections = {};
+          (item.groups || []).forEach(function (group) {
+            var enabled = (group.options || []).filter(function (option) { return option.status === 'ENABLED'; });
+            selections[group.id] = group.multi ? [] : (group.required && enabled.length ? enabled[0].id : null);
+          });
+          this.itemForm = { item: item, selections: selections, quantity: 1, remark: '' };
+          this.itemDialogVisible = true;
+        },
+        submitItem: function () {
+          if (!this.itemForm.item) return;
+          if (!this.validateItemSelections()) return;
+          var ids = this.selectedItemOptionIds();
+          if (this.orderConfirmed) {
+            this.addPendingItem(this.itemForm.item, ids, this.itemForm.quantity, this.itemForm.remark);
+            return;
+          }
+          this.postItem(this.itemForm.item, ids, this.itemForm.quantity, this.itemForm.remark);
+        },
+        addPendingItem: function (item, optionIds, quantity, remark) {
+          var normalizedOptionIds = (optionIds || []).slice().sort(function (a, b) {
+            return String(a).localeCompare(String(b));
+          });
+          var normalizedRemark = String(remark || '').trim();
+          var specDesc = '';
+          if (Array.isArray(item.groups) && item.groups.length) {
+            var parts = [];
+            item.groups.forEach(function (group) {
+              var selectedIds = normalizedOptionIds.filter(function (oid) {
+                return (group.options || []).some(function (opt) { return opt.id === oid; });
+              });
+              if (selectedIds.length) {
+                var names = selectedIds.map(function (sid) {
+                  var opt = (group.options || []).find(function (o) { return o.id === sid; });
+                  return opt ? opt.name : '';
+                }).filter(Boolean);
+                if (names.length) parts.push(group.name + ': ' + names.join('/'));
+              }
+            });
+            specDesc = parts.join('; ');
+          }
+          var existing = this.pendingItems.find(function (pendingItem) {
+            return String(pendingItem.menuItemId) === String(item.id)
+              && JSON.stringify(pendingItem.specOptionIds || []) === JSON.stringify(normalizedOptionIds)
+              && String(pendingItem.remark || '') === normalizedRemark;
+          });
+          if (existing) {
+            existing.quantity = Number(existing.quantity || 0) + Number(quantity || 0);
+          } else {
+            this.pendingItems.push({
+              menuItemId: item.id,
+              specOptionIds: normalizedOptionIds,
+              quantity: Number(quantity || 1),
+              remark: normalizedRemark,
+              itemName: item.name,
+              specification: specDesc,
+              unitPrice: this.calculateItemUnitPrice(item, normalizedOptionIds)
+            });
+          }
+          this.persistPendingItems();
+          this.itemDialogVisible = false;
+          this.$message.success(this.i18n.addedToCurrent);
+        },
+        removePendingItem: function (index) {
+          this.pendingItems.splice(index, 1);
+          this.persistPendingItems();
+        },
+        pendingItemQuantity: function (index, delta) {
+          var item = this.pendingItems[index];
+          if (!item) return;
+          var newQty = item.quantity + delta;
+          if (newQty < 1) {
+            this.removePendingItem(index);
+            return;
+          }
+          item.quantity = newQty;
+          this.persistPendingItems();
+        },
+        submitPendingItems: function () {
+          var self = this;
+          if (!self.pendingItems.length) return;
+          self.actionLoading = true;
+          axios.post('/pos/sessions/' + self.sessionDetail.session.id + '/batch-items', {
+            items: self.pendingItems.map(function (pi) {
+              return {
+                menuItemId: pi.menuItemId,
+                specOptionIds: pi.specOptionIds,
+                quantity: pi.quantity,
+                remark: pi.remark
+              };
+            })
+          }).then(function (response) {
+            self.sessionDetail = response.data;
+            self.pendingItems = [];
+            self.clearPendingItemsStorage();
+            self.$message.success(self.i18n.additionsSubmitted);
+            return self.refreshBoard();
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        postItem: function (item, optionIds, quantity, remark) {
+          var self = this;
+          if (!self.sessionDetail) {
+            self.$message.warning(self.i18n.selectAndOpenFirst);
+            return;
+          }
+          self.actionLoading = true;
+          axios.post('/pos/sessions/' + self.sessionDetail.session.id + '/items', {
+            menuItemId: item.id,
+            specOptionIds: optionIds,
+            quantity: quantity,
+            remark: remark
+          }).then(function (response) {
+            self.sessionDetail = response.data;
+            self.itemDialogVisible = false;
+            self.$message.success(self.i18n.itemAdded.replace('{0}', item.name));
+            return self.refreshBoard();
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        changeQuantity: function (item, delta) {
+          var self = this;
+          if (self.orderConfirmed) {
+            self.$message.warning(self.i18n.confirmedCannotEdit);
+            return;
+          }
+          var quantity = item.quantity + delta;
+          self.actionLoading = true;
+          axios.post('/pos/sessions/' + self.sessionDetail.session.id + '/items/' + item.id + '/quantity', {
+            quantity: Math.max(0, quantity)
+          }).then(function (response) {
+            self.sessionDetail = response.data;
+            return self.refreshBoard();
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        removeOrderItem: function (item) {
+          var self = this;
+          if (self.orderConfirmed) {
+            self.$message.warning(self.i18n.confirmedCannotRemove);
+            return;
+          }
+          self.$confirm(self.i18n.removeConfirm.replace('{0}', item.itemName), self.i18n.removeTitle, { type: 'warning' })
+            .then(function () {
+              self.actionLoading = true;
+              return axios.delete('/pos/sessions/' + self.sessionDetail.session.id + '/items/' + item.id);
+            }).then(function (response) {
+              if (!response) return;
+              self.sessionDetail = response.data;
+              return self.refreshBoard();
+            }).catch(function (error) {
+              if (error !== 'cancel' && error !== 'close') self.showError(error);
+            }).finally(function () { self.actionLoading = false; });
+        },
+        confirmCurrentOrder: function () {
+          var self = this;
+          self.actionLoading = true;
+          axios.post('/pos/sessions/' + self.sessionDetail.session.id + '/confirm')
+            .then(function (response) {
+              self.sessionDetail = response.data;
+              self.$message.success(self.i18n.orderConfirmed);
+            }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        handleSessionCommand: function (command) {
+          if (command === 'guest') {
+            this.guestCountForm = this.sessionDetail.session.guestCount;
+            this.guestDialogVisible = true;
+            return;
+          }
+          this.tableActionMode = command;
+          this.targetTableId = null;
+          this.tableActionVisible = true;
+        },
+        submitGuestCount: function () {
+          var self = this;
+          self.actionLoading = true;
+          axios.post('/pos/sessions/' + self.sessionDetail.session.id + '/guest-count', {
+            guestCount: self.guestCountForm,
+            operator: self.operator
+          }).then(function (response) {
+            self.sessionDetail = response.data;
+            self.guestDialogVisible = false;
+            return self.refreshBoard();
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        submitTableAction: function () {
+          var self = this;
+          if (!self.targetTableId) {
+            self.$message.warning(self.i18n.selectTargetTable);
+            return;
+          }
+          self.actionLoading = true;
+          axios.post('/pos/sessions/' + self.sessionDetail.session.id + '/' + self.tableActionMode, {
+            tableId: self.targetTableId,
+            operator: self.operator
+          }).then(function (response) {
+            self.sessionDetail = response.data;
+            self.tableActionVisible = false;
+            self.$message.success(self.tableActionMode === 'transfer' ? self.i18n.transferred : self.i18n.combined);
+            return self.refreshBoard();
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        openCheckoutDialog: function () {
+          var amount = Number(this.sessionDetail.order.finalAmount || 0);
+          this.cashInput = this.formatCashInput(amount);
+          this.checkoutForm = {
+            method: 'CASH',
+            receivedAmount: amount,
+            idempotencyKey: this.makeIdempotencyKey()
+          };
+          this.checkoutDialogVisible = true;
+        },
+        setCashReceived: function (amount) {
+          this.updateCashInput(this.formatCashInput(amount));
+        },
+        formatCashInput: function (amount) {
+          var normalized = Math.max(Number(amount) || 0, 0).toFixed(2);
+          return normalized.replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+        },
+        updateCashInput: function (value) {
+          this.cashInput = value;
+          var amount = Number(value);
+          this.checkoutForm.receivedAmount = Number.isFinite(amount) ? amount : 0;
+        },
+        pressCashKey: function (key) {
+          var current = this.cashInput;
+          if (key === '.') {
+            if (current.indexOf('.') >= 0) return;
+            current = current === '' ? '0.' : current + '.';
+          } else {
+            if (current === '' || current === '0') {
+              current = key === '00' ? '0' : key;
+            } else {
+              current += key;
+            }
+          }
+          var parts = current.split('.');
+          if (parts[0].length > 9 || (parts[1] && parts[1].length > 2)) return;
+          this.updateCashInput(current);
+        },
+        backspaceCashInput: function () {
+          this.updateCashInput(this.cashInput.slice(0, -1));
+        },
+        clearCashInput: function () {
+          this.updateCashInput('');
+        },
+        cashAmountSelected: function (amount) {
+          return Math.abs(this.cashReceivedAmount - Number(amount)) < 0.005;
+        },
+        submitCheckout: function () {
+          var self = this;
+          if (self.cashPaymentInsufficient) {
+            self.$message.warning(self.i18n.receivedInsufficient);
+            return;
+          }
+          self.actionLoading = true;
+          axios.post('/pos/sessions/' + self.sessionDetail.session.id + '/checkout', {
+            method: self.checkoutForm.method,
+            receivedAmount: self.checkoutForm.method === 'CASH' ? self.cashReceivedAmount : null,
+            operator: self.operator,
+            idempotencyKey: self.checkoutForm.idempotencyKey
+          }).then(function (response) {
+            if (response.data.status === 'PAID') {
+              self.$message.success(self.i18n.checkoutSuccess.replace('{0}', self.money(response.data.changeAmount)));
+              self.checkoutDialogVisible = false;
+              self.clearPendingItemsStorage();
+              self.pendingItems = [];
+              self.sessionDetail = null;
+              return self.refreshBoard();
+            }
+            self.$message.info(self.i18n.paymentProcessing);
+          }).catch(self.showError).finally(function () { self.actionLoading = false; });
+        },
+        completeCleaning: function (table) {
+          var self = this;
+          self.$confirm(self.i18n.cleaningConfirm.replace('{0}', table.tableName), self.i18n.cleaningTitle, { type: 'info' })
+            .then(function () {
+              self.actionLoading = true;
+              var payload = new URLSearchParams();
+              payload.append('operator', self.operator);
+              return axios.post('/pos/tables/' + table.tableId + '/cleaning/complete', payload, {
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }
+              });
+            }).then(function (response) {
+              if (!response) return;
+              self.$message.success(self.i18n.tableAvailable);
+              return self.refreshBoard();
+            }).catch(function (error) {
+              if (error !== 'cancel' && error !== 'close') self.showError(error);
+            }).finally(function () { self.actionLoading = false; });
+        },
+        selectedItemOptionIds: function () {
+          var ids = [];
+          Object.keys(this.itemForm.selections || {}).forEach(function (key) {
+            var value = this.itemForm.selections[key];
+            if (Array.isArray(value)) ids = ids.concat(value);
+            else if (value !== null && value !== undefined) ids.push(value);
+          }, this);
+          return ids;
+        },
+        validateItemSelections: function () {
+          for (var index = 0; index < this.itemGroups.length; index += 1) {
+            var group = this.itemGroups[index];
+            if (!group.required) continue;
+            var value = this.itemForm.selections[group.id];
+            var selected = Array.isArray(value) ? value.length > 0 : value !== null && value !== undefined;
+            if (!selected) {
+              this.$message.warning(this.i18n.selectSpecification.replace('{0}', group.name));
+              return false;
+            }
+          }
+          return true;
+        },
+        calculateItemUnitPrice: function (item, optionIds) {
+          var amount = Number(item && item.price || 0);
+          (item && item.groups || []).forEach(function (group) {
+            (group.options || []).forEach(function (option) {
+              if ((optionIds || []).some(function (id) { return String(id) === String(option.id); })) {
+                amount += Number(option.priceAdjust || 0);
+              }
+            });
+          });
+          return amount;
+        },
+        itemQuantity: function (items) {
+          return (items || []).reduce(function (total, item) {
+            return total + Number(item.quantity || 0);
+          }, 0);
+        },
+        itemAmount: function (items) {
+          return (items || []).reduce(function (total, item) {
+            return total + Number(item.subtotal !== undefined
+              ? item.subtotal : Number(item.unitPrice || 0) * Number(item.quantity || 0));
+          }, 0);
+        },
+        menuPendingQuantity: function (menuItemId) {
+          return this.pendingItems.reduce(function (total, item) {
+            return String(item.menuItemId) === String(menuItemId)
+              ? total + Number(item.quantity || 0) : total;
+          }, 0);
+        },
+        enabledOptions: function (group) {
+          return (group.options || []).filter(function (option) { return option.status === 'ENABLED'; });
+        },
+        optionLabel: function (option) {
+          var adjust = Number(option.priceAdjust || 0);
+          return option.name + (adjust === 0 ? '' : (adjust > 0 ? ' +' : ' ') + adjust.toFixed(2));
+        },
+        primaryImage: function (item) {
+          if (Array.isArray(item.images) && item.images.length && item.images[0].imagePath) {
+            return item.images[0].imagePath;
+          }
+          return item.imagePath || '';
+        },
+        isServerPendingItem: function (item) {
+          var batchSeq = Number(item && item.batchSeq || 0);
+          return this.currentConfirmations.some(function (confirmation) {
+            return Number(confirmation.batchSeq) === batchSeq;
+          });
+        },
+        tablePendingCount: function (table) {
+          var tableId = String(table.tableId);
+          return this.confirmations.filter(function (confirmation) {
+            return (confirmation.tableIds || []).some(function (id) {
+              return String(id) === tableId;
+            });
+          }).length;
+        },
+        batchTypeText: function (batchType, batchSeq) {
+          if (batchType === 'INITIAL') return this.i18n.batchInitial;
+          return this.i18n.batchAddition.replace('{0}', Number(batchSeq || 2));
+        },
+        sourceText: function (sourceType) {
+          return {
+            CUSTOMER_SCAN: this.i18n.sourceCustomerScan,
+            SELF_SERVICE: this.i18n.sourceSelfService,
+            STAFF_POS: this.i18n.sourceStaffPos
+          }[sourceType] || sourceType || this.i18n.sourceExternal;
+        },
+        waitingText: function (submittedAt) {
+          var submitted = new Date(submittedAt);
+          if (Number.isNaN(submitted.getTime())) return this.i18n.justSubmitted;
+          var minutes = Math.max(0, Math.floor((Date.now() - submitted.getTime()) / 60000));
+          if (minutes < 1) return this.i18n.justSubmitted;
+          if (minutes < 60) return this.i18n.waitingMinutes.replace('{0}', minutes);
+          return this.i18n.waitingHoursMinutes
+            .replace('{0}', Math.floor(minutes / 60)).replace('{1}', minutes % 60);
+        },
+        isCurrentTable: function (tableId) {
+          return this.sessionDetail && this.sessionDetail.occupiedTables.some(function (table) {
+            return table.id === tableId;
+          });
+        },
+        tableAmount: function (table) {
+          return table.sessions.reduce(function (total, session) {
+            return total + Number(session.amount || 0);
+          }, 0);
+        },
+        statusText: function (status) {
+          return {
+            FREE: this.i18n.free, OCCUPIED: this.i18n.occupied, SHARED: this.i18n.statusShared, CHECKING: this.i18n.statusChecking,
+            CLEANING: this.i18n.cleaning, RESERVED: this.i18n.statusReserved, DISABLED: this.i18n.statusDisabled, MAINTENANCE: this.i18n.statusMaintenance
+          }[status] || status;
+        },
+        statusTagType: function (status) {
+          return { FREE: 'success', OCCUPIED: 'warning', SHARED: 'warning', CHECKING: 'danger', CLEANING: 'info' }[status] || 'info';
+        },
+        statusClass: function (status) {
+          return String(status || 'unknown').toLowerCase();
+        },
+        money: function (value) {
+          return Number(value || 0).toFixed(2);
+        },
+        makeIdempotencyKey: function () {
+          if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID().replace(/-/g, '');
+          }
+          return String(Date.now()) + Math.random().toString(16).slice(2);
+        },
+        showError: function (error) {
+          this.$message.error(this.i18n.operationFailed);
+        },
+        goBack: function () {
+          window.location.href = '/admin';
+        }
+      }
+    });
+  })();
+</script>
+</body>
+</html>

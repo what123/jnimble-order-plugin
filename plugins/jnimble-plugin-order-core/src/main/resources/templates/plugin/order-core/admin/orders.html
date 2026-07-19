@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="#{order.admin.title}">Order Management</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+    <style>
+        [v-cloak] { display: none; }
+        .app-orders { padding: 20px; }
+        .app-orders .el-table { margin-top: 16px; }
+        .app-orders .filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+        .app-orders .filter-bar .el-input { width: 200px; }
+    </style>
+</head>
+<body>
+<h1 layout:fragment="page-title" th:text="#{order.admin.title}">Order Management</h1>
+<main layout:fragment="content">
+    <div id="app-orders" class="app-orders" v-cloak>
+        <div class="filter-bar">
+            <el-select v-model="filter.status" placeholder="Order status" clearable @change="fetchOrders" th:attr="placeholder=#{order.filter.status}">
+                <el-option label="Draft" value="DRAFT" th:attr="label=#{order.status.DRAFT}"></el-option>
+                <el-option label="Confirmed" value="CONFIRMED" th:attr="label=#{order.status.CONFIRMED}"></el-option>
+                <el-option label="Settled" value="SETTLED" th:attr="label=#{order.status.SETTLED}"></el-option>
+                <el-option label="Cancelled" value="CANCELLED" th:attr="label=#{order.status.CANCELLED}"></el-option>
+            </el-select>
+            <el-select v-model="filter.tableId" placeholder="Table" clearable @change="fetchOrders" th:attr="placeholder=#{order.table}">
+                <el-option v-for="t in tables" :key="t.id" :label="t.code" :value="t.id"></el-option>
+            </el-select>
+            <el-button type="primary" style="margin-left:auto" @click="fetchOrders" th:text="#{order.search}">Search</el-button>
+        </div>
+
+        <el-table :data="orders" border stripe style="width:100%">
+            <el-table-column prop="orderNo" label="Order No." width="180" th:attr="label=#{order.no}"></el-table-column>
+            <el-table-column label="Table" width="80" align="center" th:attr="label=#{order.table}">
+                <template slot-scope="scope">{{ tableName(scope.row.tableId) }}</template>
+            </el-table-column>
+            <el-table-column prop="partySize" label="Party Size" width="80" align="center" th:attr="label=#{order.partySize}"></el-table-column>
+            <el-table-column prop="finalAmount" label="Amount" width="120" align="right" th:attr="label=#{order.amount}">
+                <template slot-scope="scope">¥{{ scope.row.finalAmount }}</template>
+            </el-table-column>
+            <el-table-column label="Status" width="100" align="center" th:attr="label=#{order.status}">
+                <template slot-scope="scope">
+                    <el-tag :type="statusType(scope.row.status)" size="small">{{ statusLabel(scope.row.status) }}</el-tag>
+                </template>
+            </el-table-column>
+            <el-table-column prop="operator" label="Operator" width="100" th:attr="label=#{order.operator}"></el-table-column>
+            <el-table-column label="Created At" width="160" th:attr="label=#{order.createdAt}">
+                <template slot-scope="scope">{{ scope.row.createdAt || '-' }}</template>
+            </el-table-column>
+            <el-table-column label="Action" width="90" align="center" th:attr="label=#{order.action}">
+                <template slot-scope="scope">
+                    <el-button size="mini" type="primary" plain @click="viewDetail(scope.row)" th:text="#{order.detail}">Detail</el-button>
+                </template>
+            </el-table-column>
+        </el-table>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+    <th:block th:replace="~{fragment/element-locale :: scripts}" />
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script th:inline="javascript">
+        var csrfToken = /*[[${_csrf.token}]]*/ '';
+        var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+
+        axios.defaults.baseURL = '/admin/plugins/order-core';
+        axios.defaults.headers.common[csrfHeader] = csrfToken;
+
+        new Vue({
+            el: '#app-orders',
+            data: {
+                i18n: {
+                    draft: /*[[#{order.status.DRAFT}]]*/ 'Draft',
+                    confirmed: /*[[#{order.status.CONFIRMED}]]*/ 'Confirmed',
+                    settled: /*[[#{order.status.SETTLED}]]*/ 'Settled',
+                    cancelled: /*[[#{order.status.CANCELLED}]]*/ 'Cancelled'
+                },
+                orders: [],
+                tables: [],
+                filter: { status: null, tableId: null }
+            },
+            mounted: function () {
+                this.fetchTables();
+                this.fetchOrders();
+            },
+            methods: {
+                fetchTables: function () {
+                    var self = this;
+                    axios.get('/tables/list').then(function (res) {
+                        self.tables = res.data;
+                    });
+                },
+                fetchOrders: function () {
+                    var self = this;
+                    var params = {};
+                    if (this.filter.status) params.status = this.filter.status;
+                    if (this.filter.tableId) params.tableId = this.filter.tableId;
+                    axios.get('/orders/list', { params: params }).then(function (res) {
+                        self.orders = res.data;
+                    });
+                },
+                tableName: function (tableId) {
+                    var t = this.tables.find(function (t) { return t.id === tableId; });
+                    return t ? t.code : '-';
+                },
+                statusLabel: function (s) {
+                    var map = { DRAFT: this.i18n.draft, CONFIRMED: this.i18n.confirmed, SETTLED: this.i18n.settled, CANCELLED: this.i18n.cancelled };
+                    return map[s] || s;
+                },
+                statusType: function (s) {
+                    var map = { DRAFT: 'info', CONFIRMED: 'warning', SETTLED: 'success', CANCELLED: 'danger' };
+                    return map[s] || 'info';
+                },
+                viewDetail: function (row) {
+                    window.location.href = '/admin/plugins/order-core/orders/' + row.id;
+                }
+            }
+        });
+    </script>
+</main>
+</html>

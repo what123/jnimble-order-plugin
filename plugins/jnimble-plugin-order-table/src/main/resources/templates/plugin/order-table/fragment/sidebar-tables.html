@@ -1,0 +1,6 @@
+<a class="admin-shell__nav-item"
+   th:classappend="${activeNav == 'order-tables'} ? ' admin-shell__nav-item--active' : ''"
+   th:href="@{/admin/plugins/order-table/tables}">
+  <span class="admin-shell__nav-icon" aria-hidden="true"></span>
+  <span th:text="#{pos.sidebar.tables}">餐桌管理</span>
+</a>

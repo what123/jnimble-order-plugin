@@ -1,0 +1,981 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{printer-core.nodes.title}">打印节点流程</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bpmn-js@18.21.0/dist/assets/diagram-js.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bpmn-js@18.21.0/dist/assets/bpmn-js.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bpmn-js@18.21.0/dist/assets/bpmn-font/css/bpmn.css">
+  <link rel="stylesheet" th:href="@{/assets/plugins/printer-core/printer.css}">
+  <script src="https://cdn.jsdelivr.net/npm/bpmn-js@18.21.0/dist/bpmn-modeler.development.js"></script>
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{printer-core.nodes.title}">打印节点流程</h1>
+
+  <main layout:fragment="content">
+    <section class="admin-page-section flow-editor">
+      <div class="flow-scheme-bar">
+        <span class="flow-scheme-bar__label" th:text="#{printer-core.nodes.billingMode}">Billing Mode</span>
+        <div class="flow-segmented" role="radiogroup" aria-label="Select default flow" th:attr="aria-label=#{printer-core.nodes.selectFlow}">
+          <button class="flow-segmented__option" type="button" data-billing-mode="POSTPAID"
+                  role="radio" aria-checked="false" th:text="#{printer-core.nodes.mode.postpaid}">Postpaid</button>
+          <button class="flow-segmented__option" type="button" data-billing-mode="PREPAID"
+                  role="radio" aria-checked="false" th:text="#{printer-core.nodes.mode.prepaid}">Prepaid</button>
+        </div>
+        <span class="flow-scheme-bar__status" id="flowSchemeSummary" th:text="#{printer-core.nodes.currentPostpaid}">Current: Postpaid</span>
+      </div>
+
+      <div class="flow-toolbar" aria-label="Flow editor toolbar" th:attr="aria-label=#{printer-core.nodes.toolbar}">
+        <div class="flow-toolbar__group">
+          <button class="flow-icon-btn" id="zoomOutFlowBtn" type="button" title="Zoom out" aria-label="Zoom out" th:attr="title=#{printer-core.nodes.zoomOut},aria-label=#{printer-core.nodes.zoomOut}">
+            <span aria-hidden="true">−</span>
+          </button>
+          <button class="flow-icon-btn" id="zoomInFlowBtn" type="button" title="Zoom in" aria-label="Zoom in" th:attr="title=#{printer-core.nodes.zoomIn},aria-label=#{printer-core.nodes.zoomIn}">
+            <span aria-hidden="true">+</span>
+          </button>
+          <button class="flow-icon-btn flow-icon-btn--fit" id="fitFlowBtn" type="button"
+                  title="Fit canvas" aria-label="Fit canvas" th:attr="title=#{printer-core.nodes.fit},aria-label=#{printer-core.nodes.fit}">
+            <span aria-hidden="true">□</span>
+          </button>
+        </div>
+
+        <div class="flow-toolbar__group flow-toolbar__group--actions">
+          <span class="flow-save-state" id="flowSaveState" data-state="loading" role="status" th:text="#{printer-core.nodes.loading}">Loading</span>
+          <button class="admin-btn" id="downloadFlowBtn" type="button" th:text="#{printer-core.nodes.exportSvg}">Export SVG</button>
+          <button class="admin-btn admin-btn--primary" id="saveFlowBtn" type="button"
+                  th:text="#{printer-core.nodes.save}">保存流程</button>
+        </div>
+      </div>
+
+      <div class="flow-canvas-wrap">
+        <div id="flow-canvas" aria-label="Print node flow canvas" th:attr="aria-label=#{printer-core.nodes.canvas}"></div>
+        <div class="flow-canvas-state" id="flowLoadingState" role="status">
+          <span class="flow-spinner" aria-hidden="true"></span>
+          <span th:text="#{printer-core.nodes.loadingFlow}">Loading flow</span>
+        </div>
+        <div class="flow-canvas-state flow-canvas-state--error" id="flowErrorState" role="alert" hidden>
+          <strong th:text="#{printer-core.nodes.editorLoadFailed}">Flow editor failed to load</strong>
+          <span id="flowErrorMessage"></span>
+        </div>
+      </div>
+
+      <div class="flow-summary" aria-live="polite">
+        <span id="flowNodeSummary" th:text="#{printer-core.nodes.initialNodeSummary}">0 configurable nodes</span>
+        <span id="flowBindingSummary" th:text="#{printer-core.nodes.initialBindingSummary}">0 business nodes configured</span>
+      </div>
+
+      <select id="registeredNodeSource" hidden aria-hidden="true" tabindex="-1">
+        <option th:each="node : ${nodes}"
+                th:value="${node.nodeName}"
+                th:text="${node.displayName}"
+                th:attr="data-display-name=${node.displayName},
+                         data-printer-id=${node.printerId},
+                         data-template-view=${node.templateView},
+                         data-template-id=${node.templateId},
+                         data-operation-mode=${node.operationMode},
+                         data-confirmation-mode=${node.confirmationMode},
+                         data-copies=${node.copies},
+                         data-enabled=${node.enabled}">order.confirmed</option>
+      </select>
+
+      <div id="nodeConfigApp" v-cloak>
+        <el-dialog custom-class="node-config-dialog"
+                   :title="i18n.configureNode + ' · ' + (form.displayName || i18n.currentNode)"
+                   :visible.sync="visible"
+                   width="520px"
+                   :close-on-click-modal="false"
+                   @closed="handleClosed">
+          <div class="node-config-current">
+            <span class="node-config-current__icon" aria-hidden="true">N</span>
+            <div class="node-config-current__content">
+              <strong>{{ form.displayName }}</strong>
+              <span>{{ form.nodeName }}</span>
+            </div>
+            <el-tag size="mini" type="info" effect="plain">{{ i18n.currentNode }}</el-tag>
+          </div>
+
+          <el-form ref="nodeForm" :model="form" label-position="top" size="small">
+            <el-form-item :label="i18n.confirmationMode">
+              <el-radio-group v-model="form.confirmationMode" class="node-config-choice-grid">
+                <el-radio border label="MANUAL">{{ i18n.manual }}</el-radio>
+                <el-radio border label="AUTO">{{ i18n.auto }}</el-radio>
+              </el-radio-group>
+            </el-form-item>
+
+            <el-form-item :label="i18n.operationMode">
+              <el-radio-group v-model="form.operationMode" class="node-config-choice-grid"
+                              @change="handleOperationChange">
+                <el-radio border label="PAPERLESS">{{ i18n.paperlessTerminal }}</el-radio>
+                <el-radio border label="PRINT">{{ i18n.paperPrint }}</el-radio>
+              </el-radio-group>
+            </el-form-item>
+
+            <div v-if="form.operationMode === 'PRINT'" class="node-config-print-panel">
+              <el-form-item :label="i18n.printer" prop="printerId"
+                            :rules="[{ required: true, message: i18n.printerRequired, trigger: 'change' }]">
+                <el-select v-model="form.printerId" filterable clearable :placeholder="i18n.selectPrinter"
+                           style="width: 100%">
+                  <el-option th:each="printer : ${printers}"
+                             th:label="${printer.name}"
+                             th:value="${printer.id}"></el-option>
+                </el-select>
+              </el-form-item>
+              <el-form-item :label="i18n.printTemplate">
+                <el-select v-model="form.templateId" filterable clearable :placeholder="i18n.selectPublishedTemplate"
+                           style="width: 100%">
+                  <el-option th:each="template : ${templates}"
+                             th:if="${template.status == 'PUBLISHED'}"
+                             th:label="${template.name + ' · ' + template.paperWidthMm + 'mm · v' + template.publishedVersion}"
+                             th:value="${template.id}"></el-option>
+                </el-select>
+                <el-input v-if="!form.templateId && form.templateView"
+                          v-model.trim="form.templateView"
+                          maxlength="200"
+                          :placeholder="i18n.legacyTemplatePath"
+                          style="margin-top: 8px"></el-input>
+              </el-form-item>
+              <el-form-item :label="i18n.copies" prop="copies"
+                            :rules="[{ required: true, message: i18n.copiesRequired, trigger: 'change' }]">
+                <el-input-number v-model="form.copies" :min="1" :step="1" :precision="0"
+                                 controls-position="right"></el-input-number>
+                <span class="node-config-copies-suffix">{{ i18n.copiesUnit }}</span>
+              </el-form-item>
+            </div>
+
+            <el-form-item :label="i18n.nodeStatus" class="node-config-status-item">
+              <el-switch v-model="form.enabled"
+                         :active-text="i18n.enabled"
+                         :inactive-text="i18n.disabled"></el-switch>
+            </el-form-item>
+          </el-form>
+
+          <span slot="footer" class="node-config-dialog__footer">
+            <el-button size="small" @click="visible = false">{{ i18n.cancel }}</el-button>
+            <el-button size="small" type="primary" :loading="saving" @click="handleSave">{{ i18n.confirm }}</el-button>
+          </span>
+        </el-dialog>
+      </div>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+    <th:block th:replace="~{fragment/element-locale :: scripts}" />
+    <script th:inline="javascript">
+      (function () {
+        'use strict';
+
+        var FLOW_URL = '/admin/plugins/printer-core/nodes/flow';
+        var csrfToken = /*[[${_csrf != null ? _csrf.token : ''}]]*/ '';
+        var csrfHeader = /*[[${_csrf != null ? _csrf.headerName : 'X-CSRF-TOKEN'}]]*/ 'X-CSRF-TOKEN';
+        var initialBillingMode = /*[[${billingMode}]]*/ 'POSTPAID';
+        var flowI18n = {
+          configureNode: /*[[#{printer-core.nodes.configure}]]*/ 'Configure Node',
+          currentNode: /*[[#{printer-core.nodes.currentNode}]]*/ 'Current Node',
+          confirmationMode: /*[[#{printer-core.nodes.confirmationMode}]]*/ 'Confirmation Mode',
+          manual: /*[[#{printer-core.nodes.confirmation.MANUAL}]]*/ 'Manual',
+          auto: /*[[#{printer-core.nodes.confirmation.AUTO}]]*/ 'Automatic',
+          operationMode: /*[[#{printer-core.nodes.operationMode}]]*/ 'Operation Mode',
+          paperlessTerminal: /*[[#{printer-core.nodes.operation.PAPERLESS}]]*/ 'Paperless (Terminal)',
+          paperPrint: /*[[#{printer-core.nodes.operation.PRINT}]]*/ 'Paper Print',
+          printer: /*[[#{printer-core.jobs.printer}]]*/ 'Printer',
+          printerRequired: /*[[#{printer-core.nodes.printerRequired}]]*/ 'Select a printer',
+          selectPrinter: /*[[#{printer-core.nodes.selectPrinter}]]*/ 'Select printer',
+          printTemplate: /*[[#{printer-core.nodes.printTemplate}]]*/ 'Print Template',
+          selectPublishedTemplate: /*[[#{printer-core.nodes.selectPublishedTemplate}]]*/ 'Select a published template',
+          legacyTemplatePath: /*[[#{printer-core.nodes.legacyTemplatePath}]]*/ 'Legacy template path',
+          copies: /*[[#{printer-core.nodes.copies}]]*/ 'Print Copies',
+          copiesRequired: /*[[#{printer-core.nodes.copiesRequired}]]*/ 'Enter print copies',
+          copiesUnit: /*[[#{printer-core.nodes.copiesUnit}]]*/ 'copies',
+          nodeStatus: /*[[#{printer-core.nodes.nodeStatus}]]*/ 'Node Status',
+          enabled: /*[[#{printer-core.nodes.enabled}]]*/ 'Enabled',
+          disabled: /*[[#{printer-core.nodes.disabled}]]*/ 'Disabled',
+          cancel: /*[[#{printer-core.common.cancel}]]*/ 'Cancel',
+          confirm: /*[[#{printer-core.common.confirm}]]*/ 'Confirm',
+          elementUiLoadFailed: /*[[#{printer-core.nodes.elementUiLoadFailed}]]*/ 'Unable to load Element UI. Check the network and refresh.',
+          nodeUpdated: /*[[#{printer-core.nodes.nodeUpdated}]]*/ 'Node updated. Save the flow to persist changes.',
+          unboundNode: /*[[#{printer-core.nodes.unboundNode}]]*/ 'This shape is not bound to a business node.',
+          bpmnLoadFailed: /*[[#{printer-core.nodes.bpmnLoadFailed}]]*/ 'Unable to load the BPMN editor. Check the network and refresh.',
+          exportFailed: /*[[#{printer-core.nodes.exportFailed}]]*/ 'Export failed',
+          defaultFlowFailed: /*[[#{printer-core.nodes.defaultFlowFailed}]]*/ 'Unable to open the default flow. Refresh and try again.',
+          switchConfirm: /*[[#{printer-core.nodes.switchConfirm}]]*/ 'Switching replaces unsaved changes. Continue?',
+          unconfigured: /*[[#{printer-core.nodes.unconfigured}]]*/ '{0} nodes need configuration',
+          duplicateBinding: /*[[#{printer-core.nodes.duplicateBinding}]]*/ 'Business node is bound more than once: {0}',
+          missingPrinter: /*[[#{printer-core.nodes.missingPrinter}]]*/ '{0} print nodes have no printer',
+          saving: /*[[#{printer-core.nodes.saving}]]*/ 'Saving',
+          saveFailedStatus: /*[[#{printer-core.nodes.saveFailedStatus}]]*/ 'Save failed ({0})',
+          saveFailed: /*[[#{printer-core.nodes.saveFailed}]]*/ 'Save failed',
+          missingNode: /*[[#{printer-core.nodes.missingNode}]]*/ 'The node does not exist or is not bound.',
+          duplicateNode: /*[[#{printer-core.nodes.duplicateNode}]]*/ 'This business node is already bound elsewhere.',
+          printRequiresPrinter: /*[[#{printer-core.nodes.printRequiresPrinter}]]*/ 'Paper print mode requires a printer.',
+          copiesInvalid: /*[[#{printer-core.nodes.copiesInvalid}]]*/ 'Print copies must be greater than 0.',
+          configurableNodes: /*[[#{printer-core.nodes.configurableNodes}]]*/ '{0} configurable nodes',
+          configuredNodes: /*[[#{printer-core.nodes.configuredNodes}]]*/ '{0} / {1} business nodes configured',
+          currentScheme: /*[[#{printer-core.nodes.currentScheme}]]*/ 'Current: {0}',
+          prepaid: /*[[#{printer-core.nodes.mode.prepaid}]]*/ 'Prepaid',
+          postpaid: /*[[#{printer-core.nodes.mode.postpaid}]]*/ 'Postpaid',
+          print: /*[[#{printer-core.nodes.label.print}]]*/ 'Print',
+          paperless: /*[[#{printer-core.nodes.label.paperless}]]*/ 'Paperless',
+          automatic: /*[[#{printer-core.nodes.label.auto}]]*/ 'Automatic',
+          manualLabel: /*[[#{printer-core.nodes.label.manual}]]*/ 'Manual',
+          unsaved: /*[[#{printer-core.nodes.unsaved}]]*/ 'Unsaved changes',
+          saved: /*[[#{printer-core.nodes.saved}]]*/ 'Saved',
+          defaultFlow: /*[[#{printer-core.nodes.defaultFlow}]]*/ 'Default flow',
+          unavailable: /*[[#{printer-core.nodes.unavailable}]]*/ 'Unavailable',
+          start: /*[[#{printer-core.nodes.step.start}]]*/ 'Start',
+          end: /*[[#{printer-core.nodes.step.end}]]*/ 'End',
+          submit: /*[[#{printer-core.nodes.step.submit}]]*/ 'User/PDA Order',
+          frontdesk: /*[[#{printer-core.nodes.step.frontdesk}]]*/ 'Front Desk Confirmation',
+          kitchen: /*[[#{printer-core.nodes.step.kitchen}]]*/ 'Kitchen Confirmation',
+          served: /*[[#{printer-core.nodes.step.served}]]*/ 'Complete Serving',
+          settle: /*[[#{printer-core.nodes.step.settle}]]*/ 'Settlement',
+          cancelled: /*[[#{printer-core.nodes.step.cancelled}]]*/ 'Order Cancellation',
+          itemAdded: /*[[#{printer-core.nodes.step.itemAdded}]]*/ 'Add Items',
+          refund: /*[[#{printer-core.nodes.step.refund}]]*/ 'Return Items'
+        };
+        var canvasElement = document.getElementById('flow-canvas');
+        var loadingElement = document.getElementById('flowLoadingState');
+        var errorElement = document.getElementById('flowErrorState');
+        var errorMessageElement = document.getElementById('flowErrorMessage');
+        var saveStateElement = document.getElementById('flowSaveState');
+        var saveButton = document.getElementById('saveFlowBtn');
+        var nodeSource = document.getElementById('registeredNodeSource');
+        var schemeButtons = document.querySelectorAll('[data-billing-mode]');
+        var initialized = false;
+        var busy = false;
+        var dirty = false;
+        var hasSavedFlow = true;
+        var resizeTimer = null;
+        var activeBillingMode = initialBillingMode === 'PREPAID' ? 'PREPAID' : 'POSTPAID';
+
+        canvasElement.addEventListener('mousedown', preventFlowStructureEdits, true);
+
+        var registeredNodes = Array.prototype.slice.call(nodeSource.options)
+          .filter(function (option) { return Boolean(option.value); })
+          .map(function (option) {
+            return {
+              nodeName: option.value,
+              displayName: localizedNodeName(option.value, option.dataset.displayName || option.value),
+              printerId: option.dataset.printerId || '',
+              templateView: option.dataset.templateView || '',
+              templateId: option.dataset.templateId || '',
+              operationMode: option.dataset.operationMode ||
+                (option.dataset.printerId ? 'PRINT' : 'PAPERLESS'),
+              confirmationMode: option.dataset.confirmationMode || 'MANUAL',
+              copies: normalizeCopies(option.dataset.copies),
+              enabled: option.dataset.enabled !== 'false'
+            };
+          });
+        var registeredNodesByName = new Map(registeredNodes.map(function (node) {
+          return [node.nodeName, node];
+        }));
+
+        if (typeof window.Vue !== 'function' || !window.ELEMENT) {
+          showFatalError(flowI18n.elementUiLoadFailed);
+          return;
+        }
+
+        var nodeConfigApp = new window.Vue({
+          el: '#nodeConfigApp',
+          data: {
+            i18n: flowI18n,
+            visible: false,
+            saving: false,
+            form: createNodeConfigForm()
+          },
+          methods: {
+            open: function (config) {
+              this.form = Object.assign(createNodeConfigForm(), config);
+              this.visible = true;
+              this.$nextTick(function () {
+                if (this.$refs.nodeForm) {
+                  this.$refs.nodeForm.clearValidate();
+                }
+              }.bind(this));
+            },
+            handleOperationChange: function () {
+              this.$nextTick(function () {
+                if (this.$refs.nodeForm) {
+                  this.$refs.nodeForm.clearValidate('printerId');
+                }
+              }.bind(this));
+            },
+            handleSave: function () {
+              var self = this;
+              this.$refs.nodeForm.validate(function (valid) {
+                if (!valid) {
+                  return;
+                }
+                self.saving = true;
+                var errorMessage = saveNodeConfig(self.form);
+                self.saving = false;
+                if (errorMessage) {
+                  self.$message.error(errorMessage);
+                  return;
+                }
+                self.visible = false;
+                self.$message.success(flowI18n.nodeUpdated);
+              });
+            },
+            handleClosed: function () {
+              this.saving = false;
+              this.form = createNodeConfigForm();
+            },
+            warnUnboundNode: function () {
+              this.$message.warning(flowI18n.unboundNode);
+            }
+          }
+        });
+
+        var jnimbleModdleDescriptor = {
+          name: 'JNimble',
+          uri: 'https://jnimble.com/schema/bpmn',
+          prefix: 'jnimble',
+          xml: { tagAlias: 'lowerCase' },
+          types: [{
+            name: 'PrintServiceTask',
+            extends: ['bpmn:ServiceTask'],
+            properties: [
+              { name: 'nodeName', isAttr: true, type: 'String' },
+              { name: 'printerId', isAttr: true, type: 'String' },
+              { name: 'templateView', isAttr: true, type: 'String' },
+              { name: 'templateId', isAttr: true, type: 'String' },
+              { name: 'operationMode', isAttr: true, type: 'String' },
+              { name: 'confirmationMode', isAttr: true, type: 'String' },
+              { name: 'copies', isAttr: true, type: 'String' },
+              { name: 'enabled', isAttr: true, type: 'Boolean' }
+            ]
+          }]
+        };
+
+        if (typeof window.BpmnJS !== 'function') {
+          showFatalError(flowI18n.bpmnLoadFailed);
+          return;
+        }
+
+        var modeler = new window.BpmnJS({
+          container: canvasElement,
+          keyboard: { bindTo: null },
+          moddleExtensions: { jnimble: jnimbleModdleDescriptor }
+        });
+        var eventBus = modeler.get('eventBus');
+        var elementRegistry = modeler.get('elementRegistry');
+        var modeling = modeler.get('modeling');
+        var canvas = modeler.get('canvas');
+
+        updateSchemeSelection();
+
+        eventBus.on('commandStack.changed', function () {
+          if (initialized) {
+            setDirty(true);
+            refreshDiagramState();
+          }
+        });
+
+        eventBus.on('element.click', function (event) {
+          if (event.element && event.element.type === 'bpmn:ServiceTask') {
+            if (event.originalEvent) {
+              event.originalEvent.preventDefault();
+            }
+            event.stopPropagation();
+            openNodeConfig(event.element);
+          }
+        });
+
+        document.getElementById('zoomOutFlowBtn').addEventListener('click', function () {
+          canvas.zoom(Math.max(0.2, canvas.zoom() / 1.2));
+        });
+
+        document.getElementById('zoomInFlowBtn').addEventListener('click', function () {
+          canvas.zoom(Math.min(4, canvas.zoom() * 1.2));
+        });
+
+        document.getElementById('fitFlowBtn').addEventListener('click', function () {
+          fitFlowToViewport();
+        });
+
+        schemeButtons.forEach(function (button) {
+          button.addEventListener('click', function () {
+            switchBillingMode(button.dataset.billingMode);
+          });
+        });
+
+        document.getElementById('downloadFlowBtn').addEventListener('click', async function () {
+          try {
+            var result = await modeler.saveSVG();
+            var blob = new Blob([result.svg], { type: 'image/svg+xml' });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement('a');
+            link.href = url;
+            link.download = 'printer-flow.svg';
+            link.click();
+            window.setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+          } catch (error) {
+            setSaveState(flowI18n.exportFailed, 'error');
+          }
+        });
+
+        saveButton.addEventListener('click', saveFlow);
+
+        window.addEventListener('beforeunload', function (event) {
+          if (dirty) {
+            event.preventDefault();
+            event.returnValue = '';
+          }
+        });
+
+        window.addEventListener('resize', function () {
+          window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(function () {
+            if (initialized) {
+              canvas.resized();
+              fitFlowToViewport();
+            }
+          }, 120);
+        });
+
+        loadFlow();
+
+        async function loadFlow() {
+          try {
+            await importFlow(defaultFlowXml(activeBillingMode), false);
+          } catch (error) {
+            showFatalError(flowI18n.defaultFlowFailed);
+          }
+        }
+
+        async function switchBillingMode(nextBillingMode) {
+          if (nextBillingMode !== 'POSTPAID' && nextBillingMode !== 'PREPAID') {
+            return;
+          }
+          if (nextBillingMode === activeBillingMode) {
+            return;
+          }
+          if (dirty && !window.confirm(flowI18n.switchConfirm)) {
+            return;
+          }
+
+          activeBillingMode = nextBillingMode;
+          updateSchemeSelection();
+          await importFlow(defaultFlowXml(nextBillingMode), true);
+        }
+
+        async function importFlow(xml, markAsDirty) {
+          initialized = false;
+          await modeler.importXML(xml);
+          fitFlowToViewport();
+          initialized = true;
+          loadingElement.hidden = true;
+          errorElement.hidden = true;
+          setDirty(Boolean(markAsDirty));
+          refreshDiagramState();
+        }
+
+        async function saveFlow() {
+          if (busy) {
+            return;
+          }
+
+          var serviceTasks = getServiceTasks();
+          var bindings = serviceTasks.map(readNodeBinding);
+          var unconfiguredCount = bindings.filter(function (binding) { return !binding.nodeName; }).length;
+          var duplicateNodeName = findDuplicateNodeName(bindings);
+          refreshDiagramState();
+
+          if (unconfiguredCount > 0) {
+            setSaveState(flowI18n.unconfigured.replace('{0}', unconfiguredCount), 'error');
+            return;
+          }
+          if (duplicateNodeName) {
+            setSaveState(flowI18n.duplicateBinding.replace('{0}', duplicateNodeName), 'error');
+            return;
+          }
+          var missingPrinterCount = bindings.filter(function (binding) {
+            return binding.operationMode === 'PRINT' && !binding.printerId;
+          }).length;
+          if (missingPrinterCount > 0) {
+            setSaveState(flowI18n.missingPrinter.replace('{0}', missingPrinterCount), 'error');
+            return;
+          }
+
+          setBusy(true);
+          setSaveState(flowI18n.saving, 'loading');
+          try {
+            var result = await modeler.saveXML({ format: true });
+            var headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
+            if (csrfToken) {
+              headers[csrfHeader] = csrfToken;
+            }
+            var response = await fetch(FLOW_URL, {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify({
+                billingMode: activeBillingMode,
+                xml: result.xml,
+                nodes: bindings.map(function (binding) {
+                  return {
+                    nodeName: binding.nodeName,
+                    printerId: binding.operationMode === 'PRINT' ? binding.printerId : '',
+                    templateView: binding.operationMode === 'PRINT' ? binding.templateView : '',
+                    templateId: binding.operationMode === 'PRINT' ? binding.templateId : '',
+                    operationMode: binding.operationMode,
+                    confirmationMode: binding.confirmationMode,
+                    copies: binding.copies,
+                    enabled: binding.enabled
+                  };
+                })
+              })
+            });
+            await response.text();
+            if (!response.ok) {
+              throw new Error(flowI18n.saveFailedStatus.replace('{0}', response.status));
+            }
+            hasSavedFlow = true;
+            setDirty(false);
+          } catch (error) {
+            console.error('Failed to save flow', error);
+            setSaveState(error.message || flowI18n.saveFailed, 'error');
+          } finally {
+            setBusy(false);
+          }
+        }
+
+        function openNodeConfig(element) {
+          var binding = readNodeBinding(element);
+          var registeredNode = registeredNodesByName.get(binding.nodeName);
+          if (!registeredNode) {
+            var elementDisplayName = String(element.businessObject.name || '').split('\n')[0];
+            registeredNode = registeredNodes.find(function (node) {
+              return node.displayName === elementDisplayName;
+            });
+          }
+          if (!registeredNode) {
+            nodeConfigApp.warnUnboundNode();
+            return;
+          }
+
+          nodeConfigApp.open({
+            elementId: element.id,
+            nodeName: registeredNode.nodeName,
+            displayName: registeredNode.displayName,
+            printerId: binding.hasPrinterId ? binding.printerId : registeredNode.printerId,
+            templateView: binding.hasTemplateView ? binding.templateView : registeredNode.templateView,
+            templateId: binding.hasTemplateId ? binding.templateId : registeredNode.templateId,
+            operationMode: binding.hasOperationMode
+              ? binding.operationMode
+              : registeredNode.operationMode,
+            confirmationMode: binding.hasConfirmationMode
+              ? binding.confirmationMode
+              : registeredNode.confirmationMode,
+            copies: binding.hasCopies ? binding.copies : registeredNode.copies,
+            enabled: binding.hasEnabled ? binding.enabled : registeredNode.enabled
+          });
+        }
+
+        function saveNodeConfig(form) {
+          var element = elementRegistry.get(form.elementId);
+          var node = registeredNodesByName.get(form.nodeName);
+          if (!element || !node) {
+            return flowI18n.missingNode;
+          }
+
+          var duplicate = getServiceTasks().some(function (candidate) {
+            return candidate.id !== element.id && readNodeBinding(candidate).nodeName === node.nodeName;
+          });
+          if (duplicate) {
+            return flowI18n.duplicateNode;
+          }
+
+          var operationMode = form.operationMode === 'PRINT' ? 'PRINT' : 'PAPERLESS';
+          var confirmationMode = form.confirmationMode === 'AUTO' ? 'AUTO' : 'MANUAL';
+          var copies = normalizeCopies(form.copies);
+          if (operationMode === 'PRINT' && !form.printerId) {
+            return flowI18n.printRequiresPrinter;
+          }
+          if (operationMode === 'PRINT' && copies < 1) {
+            return flowI18n.copiesInvalid;
+          }
+
+          modeling.updateProperties(element, {
+            name: formatTaskName(node.displayName, operationMode, confirmationMode, copies),
+            nodeName: node.nodeName,
+            printerId: operationMode === 'PRINT' ? form.printerId : '',
+            templateView: operationMode === 'PRINT' ? form.templateView.trim() : '',
+            templateId: operationMode === 'PRINT' ? form.templateId : '',
+            operationMode: operationMode,
+            confirmationMode: confirmationMode,
+            copies: operationMode === 'PRINT' ? copies : 1,
+            enabled: form.enabled
+          });
+          node.printerId = operationMode === 'PRINT' ? form.printerId : '';
+          node.templateView = operationMode === 'PRINT' ? form.templateView.trim() : '';
+          node.templateId = operationMode === 'PRINT' ? form.templateId : '';
+          node.operationMode = operationMode;
+          node.confirmationMode = confirmationMode;
+          node.copies = operationMode === 'PRINT' ? copies : 1;
+          node.enabled = form.enabled;
+          refreshDiagramState();
+          return '';
+        }
+
+        function createNodeConfigForm() {
+          return {
+            elementId: '',
+            nodeName: '',
+            displayName: '',
+            printerId: '',
+            templateView: '',
+            templateId: '',
+            operationMode: 'PAPERLESS',
+            confirmationMode: 'MANUAL',
+            copies: 1,
+            enabled: true
+          };
+        }
+
+        function readNodeBinding(element) {
+          var businessObject = element.businessObject;
+          var nodeName = readModelProperty(businessObject, 'nodeName');
+          var printerId = readModelProperty(businessObject, 'printerId');
+          var templateView = readModelProperty(businessObject, 'templateView');
+          var templateId = readModelProperty(businessObject, 'templateId');
+          var operationMode = readModelProperty(businessObject, 'operationMode');
+          var confirmationMode = readModelProperty(businessObject, 'confirmationMode');
+          var copies = readModelProperty(businessObject, 'copies');
+          var enabled = readModelProperty(businessObject, 'enabled');
+          var normalizedOperationMode = operationMode.present
+            ? String(operationMode.value || '').toUpperCase()
+            : (printerId.value ? 'PRINT' : 'PAPERLESS');
+          var normalizedConfirmationMode = confirmationMode.present
+            ? String(confirmationMode.value || '').toUpperCase()
+            : 'MANUAL';
+          return {
+            nodeName: String(nodeName.value || ''),
+            printerId: String(printerId.value || ''),
+            templateView: String(templateView.value || ''),
+            templateId: String(templateId.value || ''),
+            operationMode: normalizedOperationMode === 'PRINT' ? 'PRINT' : 'PAPERLESS',
+            confirmationMode: normalizedConfirmationMode === 'AUTO' ? 'AUTO' : 'MANUAL',
+            copies: normalizeCopies(copies.value),
+            enabled: enabled.present ? enabled.value !== false && enabled.value !== 'false' : true,
+            hasPrinterId: printerId.present,
+            hasTemplateView: templateView.present,
+            hasTemplateId: templateId.present,
+            hasOperationMode: operationMode.present,
+            hasConfirmationMode: confirmationMode.present,
+            hasCopies: copies.present,
+            hasEnabled: enabled.present
+          };
+        }
+
+        function readModelProperty(businessObject, propertyName) {
+          var value = businessObject.get(propertyName);
+          if (value !== undefined && value !== null) {
+            return { present: true, value: value };
+          }
+          var attributes = businessObject.$attrs || {};
+          var prefixedName = 'jnimble:' + propertyName;
+          if (Object.prototype.hasOwnProperty.call(attributes, prefixedName)) {
+            return { present: true, value: attributes[prefixedName] };
+          }
+          if (Object.prototype.hasOwnProperty.call(attributes, propertyName)) {
+            return { present: true, value: attributes[propertyName] };
+          }
+          return { present: false, value: '' };
+        }
+
+        function getServiceTasks() {
+          return elementRegistry.filter(function (element) {
+            return element.type === 'bpmn:ServiceTask' && !element.labelTarget;
+          });
+        }
+
+        function findDuplicateNodeName(bindings) {
+          var seen = new Set();
+          for (var index = 0; index < bindings.length; index += 1) {
+            var nodeName = bindings[index].nodeName;
+            if (nodeName && seen.has(nodeName)) {
+              return nodeName;
+            }
+            seen.add(nodeName);
+          }
+          return '';
+        }
+
+        function refreshDiagramState() {
+          var tasks = getServiceTasks();
+          var configuredCount = 0;
+          var boundNodeNames = new Set();
+          tasks.forEach(function (element) {
+            var binding = readNodeBinding(element);
+            canvas.addMarker(element, 'flow-node--configurable');
+            canvas.removeMarker(element, 'flow-node--configured');
+            canvas.removeMarker(element, 'flow-node--unconfigured');
+            if (binding.nodeName) {
+              configuredCount += 1;
+              boundNodeNames.add(binding.nodeName);
+              canvas.addMarker(element, 'flow-node--configured');
+            } else {
+              canvas.addMarker(element, 'flow-node--unconfigured');
+            }
+          });
+          document.getElementById('flowNodeSummary').textContent =
+            flowI18n.configurableNodes.replace('{0}', tasks.length);
+          document.getElementById('flowBindingSummary').textContent =
+            flowI18n.configuredNodes.replace('{0}', configuredCount).replace('{1}', tasks.length);
+        }
+
+        function updateSchemeSelection() {
+          schemeButtons.forEach(function (button) {
+            var selected = button.dataset.billingMode === activeBillingMode;
+            button.classList.toggle('flow-segmented__option--active', selected);
+            button.setAttribute('aria-checked', String(selected));
+          });
+          document.getElementById('flowSchemeSummary').textContent =
+            flowI18n.currentScheme.replace('{0}', activeBillingMode === 'PREPAID' ? flowI18n.prepaid : flowI18n.postpaid);
+        }
+
+        function formatTaskName(displayName, operationMode, confirmationMode, copies) {
+          var operationLabel = operationMode === 'PRINT' ? flowI18n.print : flowI18n.paperless;
+          var confirmationLabel = confirmationMode === 'AUTO' ? flowI18n.automatic : flowI18n.manualLabel;
+          var copiesLabel = operationMode === 'PRINT' ? ' · ' + normalizeCopies(copies) + ' ' + flowI18n.copiesUnit : '';
+          return displayName + '\n' + operationLabel + ' · ' + confirmationLabel + copiesLabel;
+        }
+
+        function fitFlowToViewport() {
+          canvas.zoom('fit-viewport');
+          if (window.matchMedia('(max-width: 520px)').matches) {
+            canvas.zoom(canvas.zoom() * 0.65);
+            canvas.scroll({ dx: 55, dy: 0 });
+          }
+        }
+
+        function setDirty(value) {
+          dirty = value;
+          if (dirty) {
+            setSaveState(flowI18n.unsaved, 'warning');
+          } else if (hasSavedFlow) {
+            setSaveState(flowI18n.saved, 'success');
+          } else {
+            setSaveState(flowI18n.defaultFlow, 'neutral');
+          }
+        }
+
+        function setBusy(value) {
+          busy = value;
+          saveButton.disabled = value;
+        }
+
+        function setSaveState(message, state) {
+          saveStateElement.textContent = message;
+          saveStateElement.dataset.state = state;
+        }
+
+        function showFatalError(message) {
+          loadingElement.hidden = true;
+          errorElement.hidden = false;
+          errorMessageElement.textContent = message;
+          saveButton.disabled = true;
+          setSaveState(flowI18n.unavailable, 'error');
+        }
+
+        function defaultFlowXml(billingMode) {
+          var steps = defaultFlowSteps(billingMode);
+          var elementIds = ['StartEvent_1'].concat(steps.map(function (step) { return step.id; }));
+          elementIds.push('EndEvent_1');
+          var semantic = [];
+          var sequenceFlows = [];
+
+          semantic.push(
+            '<bpmn:startEvent id="StartEvent_1" name="' + escapeXmlAttribute(flowI18n.start) + '">' +
+            '<bpmn:outgoing>Flow_1</bpmn:outgoing></bpmn:startEvent>'
+          );
+          steps.forEach(function (step, index) {
+            var incomingFlow = 'Flow_' + (index + 1);
+            var outgoingFlow = 'Flow_' + (index + 2);
+            if (step.type === 'userTask') {
+              semantic.push(
+                '<bpmn:userTask id="' + step.id + '" name="' + escapeXmlAttribute(step.displayName) + '">' +
+                '<bpmn:incoming>' + incomingFlow + '</bpmn:incoming>' +
+                '<bpmn:outgoing>' + outgoingFlow + '</bpmn:outgoing></bpmn:userTask>'
+              );
+              return;
+            }
+
+            var node = registeredNodesByName.get(step.nodeName) || {
+              nodeName: step.nodeName,
+              displayName: step.displayName,
+              printerId: '',
+              templateView: '',
+              templateId: '',
+              operationMode: 'PAPERLESS',
+              confirmationMode: 'MANUAL',
+              copies: 1,
+              enabled: true
+            };
+            var operationMode = node.operationMode === 'PRINT' && node.printerId ? 'PRINT' : 'PAPERLESS';
+            var confirmationMode = node.confirmationMode === 'AUTO' ? 'AUTO' : 'MANUAL';
+            var copies = normalizeCopies(node.copies);
+            var taskName = formatTaskName(node.displayName || step.displayName, operationMode, confirmationMode, copies);
+            semantic.push(
+              '<bpmn:serviceTask id="' + step.id + '" name="' + escapeXmlAttribute(taskName) + '" ' +
+              'jnimble:nodeName="' + escapeXmlAttribute(node.nodeName) + '" ' +
+              'jnimble:printerId="' + escapeXmlAttribute(operationMode === 'PRINT' ? node.printerId : '') + '" ' +
+              'jnimble:templateView="' +
+                escapeXmlAttribute(operationMode === 'PRINT' ? node.templateView : '') + '" ' +
+              'jnimble:templateId="' +
+                escapeXmlAttribute(operationMode === 'PRINT' ? node.templateId : '') + '" ' +
+              'jnimble:operationMode="' + operationMode + '" ' +
+              'jnimble:confirmationMode="' + confirmationMode + '" ' +
+              'jnimble:copies="' + String(operationMode === 'PRINT' ? copies : 1) + '" ' +
+              'jnimble:enabled="' + String(node.enabled !== false) + '">' +
+              '<bpmn:incoming>' + incomingFlow + '</bpmn:incoming>' +
+              '<bpmn:outgoing>' + outgoingFlow + '</bpmn:outgoing></bpmn:serviceTask>'
+            );
+          });
+          semantic.push(
+            '<bpmn:endEvent id="EndEvent_1" name="' + escapeXmlAttribute(flowI18n.end) + '">' +
+            '<bpmn:incoming>Flow_' + (steps.length + 1) + '</bpmn:incoming></bpmn:endEvent>'
+          );
+          for (var flowIndex = 0; flowIndex < elementIds.length - 1; flowIndex += 1) {
+            sequenceFlows.push(
+              '<bpmn:sequenceFlow id="Flow_' + (flowIndex + 1) + '" sourceRef="' + elementIds[flowIndex] +
+              '" targetRef="' + elementIds[flowIndex + 1] + '" />'
+            );
+          }
+
+          var geometry = defaultFlowGeometry(steps);
+          var shapes = geometry.map(function (item) {
+            return '<bpmndi:BPMNShape id="' + item.id + '_di" bpmnElement="' + item.id + '">' +
+              '<dc:Bounds x="' + item.x + '" y="' + item.y + '" width="' + item.width +
+              '" height="' + item.height + '" /></bpmndi:BPMNShape>';
+          });
+          var edges = [];
+          for (var edgeIndex = 0; edgeIndex < geometry.length - 1; edgeIndex += 1) {
+            var waypoints = edgeWaypoints(geometry[edgeIndex], geometry[edgeIndex + 1]);
+            edges.push(
+              '<bpmndi:BPMNEdge id="Flow_' + (edgeIndex + 1) + '_di" bpmnElement="Flow_' +
+              (edgeIndex + 1) + '">' + waypoints.map(function (point) {
+                return '<di:waypoint x="' + point.x + '" y="' + point.y + '" />';
+              }).join('') + '</bpmndi:BPMNEdge>'
+            );
+          }
+
+          var modeId = billingMode === 'PREPAID' ? 'prepaid' : 'postpaid';
+          return '<?xml version="1.0" encoding="UTF-8"?>' +
+            '<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" ' +
+            'xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" ' +
+            'xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" ' +
+            'xmlns:di="http://www.omg.org/spec/DD/20100524/DI" ' +
+            'xmlns:jnimble="https://jnimble.com/schema/bpmn" ' +
+            'id="Definitions_' + modeId + '" targetNamespace="https://jnimble.com/schema/bpmn">' +
+            '<bpmn:process id="Process_' + modeId + '" isExecutable="false">' +
+            semantic.join('') + sequenceFlows.join('') + '</bpmn:process>' +
+            '<bpmndi:BPMNDiagram id="BPMNDiagram_' + modeId + '">' +
+            '<bpmndi:BPMNPlane id="BPMNPlane_' + modeId + '" bpmnElement="Process_' + modeId + '">' +
+            shapes.join('') + edges.join('') + '</bpmndi:BPMNPlane></bpmndi:BPMNDiagram></bpmn:definitions>';
+        }
+
+        function defaultFlowSteps(billingMode) {
+          var submit = { id: 'Task_Submit', type: 'userTask', displayName: flowI18n.submit };
+          var frontdesk = configurableStep('Task_Frontdesk', 'order.confirmed', flowI18n.frontdesk);
+          var kitchen = configurableStep('Task_Kitchen', 'order.kitchen.confirmed', flowI18n.kitchen);
+          var served = configurableStep('Task_Served', 'order.served', flowI18n.served);
+          var settle = configurableStep('Task_Settle', 'order.settled', flowI18n.settle);
+          return billingMode === 'PREPAID'
+            ? [submit, settle, frontdesk, kitchen, served]
+            : [submit, frontdesk, kitchen, served, settle];
+        }
+
+        function localizedNodeName(nodeName, fallback) {
+          return {
+            'order.confirmed': flowI18n.frontdesk,
+            'order.kitchen.confirmed': flowI18n.kitchen,
+            'order.served': flowI18n.served,
+            'order.settled': flowI18n.settle,
+            'order.cancelled': flowI18n.cancelled,
+            'order.item.added': flowI18n.itemAdded,
+            'order.refund': flowI18n.refund
+          }[nodeName] || fallback;
+        }
+
+        function configurableStep(id, nodeName, displayName) {
+          return { id: id, type: 'serviceTask', nodeName: nodeName, displayName: displayName };
+        }
+
+        function defaultFlowGeometry(steps) {
+          var positions = [
+            { x: 82, y: 132, width: 36, height: 36 },
+            { x: 150, y: 110, width: 140, height: 80 },
+            { x: 340, y: 110, width: 140, height: 80 },
+            { x: 530, y: 110, width: 140, height: 80 },
+            { x: 530, y: 310, width: 140, height: 80 },
+            { x: 340, y: 310, width: 140, height: 80 },
+            { x: 202, y: 332, width: 36, height: 36 }
+          ];
+          var ids = ['StartEvent_1'].concat(steps.map(function (step) { return step.id; }));
+          ids.push('EndEvent_1');
+          return ids.map(function (id, index) {
+            return Object.assign({ id: id }, positions[index]);
+          });
+        }
+
+        function edgeWaypoints(source, target) {
+          var sourceCenterX = source.x + source.width / 2;
+          var sourceCenterY = source.y + source.height / 2;
+          var targetCenterX = target.x + target.width / 2;
+          var targetCenterY = target.y + target.height / 2;
+          if (sourceCenterY === targetCenterY) {
+            return targetCenterX > sourceCenterX
+              ? [
+                { x: source.x + source.width, y: sourceCenterY },
+                { x: target.x, y: targetCenterY }
+              ]
+              : [
+                { x: source.x, y: sourceCenterY },
+                { x: target.x + target.width, y: targetCenterY }
+              ];
+          }
+          return [
+            { x: sourceCenterX, y: source.y + source.height },
+            { x: targetCenterX, y: target.y }
+          ];
+        }
+
+        function escapeXmlAttribute(value) {
+          return escapeXml(value).replace(/\n/g, '&#10;');
+        }
+
+        function escapeXml(value) {
+          return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+        }
+
+        function normalizeCopies(value) {
+          var copies = Number(value);
+          return Number.isInteger(copies) && copies > 0 ? copies : 1;
+        }
+
+        function preventFlowStructureEdits(event) {
+          var target = event.target;
+          while (target && target !== canvasElement) {
+            if (target.classList && target.classList.contains('djs-element')) {
+              event.stopImmediatePropagation();
+              return;
+            }
+            target = target.parentNode;
+          }
+        }
+      })();
+    </script>
+  </main>
+</body>
+</html>

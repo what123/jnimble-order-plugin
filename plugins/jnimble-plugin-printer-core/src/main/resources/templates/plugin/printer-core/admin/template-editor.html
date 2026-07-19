@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{printer-core.editor.title}">Edit Print Template</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+  <link rel="stylesheet" th:href="@{/assets/plugins/printer-core/printer.css}">
+</head>
+<body>
+  <h1 layout:fragment="page-title" th:text="#{printer-core.editor.title}">Edit Print Template</h1>
+  <main layout:fragment="content">
+    <div id="app-template-editor" class="template-editor" v-cloak>
+      <div class="template-editor__toolbar">
+        <div class="template-editor__identity">
+          <el-button size="small"
+                     icon="el-icon-arrow-left"
+                     @click="goBack"
+                     title="Back to templates" th:attr="title=#{printer-core.editor.back}"></el-button>
+          <el-input v-model.trim="template.name"
+                    size="small"
+                    maxlength="128"
+                    aria-label="Template name" th:attr="aria-label=#{printer-core.templates.name}"
+                    class="template-editor__name"></el-input>
+          <el-tag v-if="template.status === 'PUBLISHED'" type="success" size="small">
+            {{ i18n.published }} v{{ template.publishedVersion }}
+          </el-tag>
+          <el-tag v-else type="info" size="small">{{ i18n.draft }}</el-tag>
+        </div>
+        <div class="template-editor__actions">
+          <div class="template-editor__paper-switch">
+            <span>{{ i18n.paperWidth }}</span>
+            <el-radio-group v-model="template.paperWidthMm" size="small" @change="changePaperWidth">
+              <el-radio-button :label="58">58mm</el-radio-button>
+              <el-radio-button :label="80">80mm</el-radio-button>
+            </el-radio-group>
+          </div>
+          <el-button size="small" icon="el-icon-document" @click="jsonDialogVisible = true">JSON</el-button>
+          <el-button size="small" icon="el-icon-view" :loading="previewing" @click="openPreview">{{ i18n.preview }}</el-button>
+          <el-button size="small" icon="el-icon-check" :loading="saving" @click="saveDraft(true)">{{ i18n.save }}</el-button>
+          <el-button type="primary"
+                     size="small"
+                     icon="el-icon-upload2"
+                     :loading="publishing"
+                     @click="publishTemplate">{{ i18n.publish }}</el-button>
+        </div>
+      </div>
+
+      <div v-if="violations.length" class="template-editor__violations">
+        <el-alert :title="i18n.validationTitle" type="error" :closable="false" show-icon>
+          <ul class="template-editor__violation-list">
+            <li v-for="violation in violations" :key="violation.path + violation.message">
+              <code>{{ violation.path }}</code> {{ violation.message }}
+            </li>
+          </ul>
+        </el-alert>
+      </div>
+
+      <div class="template-editor__workspace" v-loading="loading">
+        <aside class="template-panel template-panel--palette">
+          <div class="template-panel__header">
+            <div>
+              <h2>{{ i18n.componentLibrary }}</h2>
+              <small>{{ i18n.dragToCanvas }}</small>
+            </div>
+            <el-tag size="mini" type="info">{{ blockCatalog.length }}</el-tag>
+          </div>
+          <div class="template-panel__body">
+            <draggable :list="blockCatalog"
+                       :group="{ name: 'print-blocks', pull: 'clone', put: false }"
+                       :sort="false"
+                       :clone="cloneBlock"
+                       class="template-palette">
+              <button v-for="block in blockCatalog"
+                      :key="block.type"
+                      type="button"
+                      class="template-palette__item">
+                <span class="template-palette__icon" :class="blockIcon(block.type)" aria-hidden="true"></span>
+                <span class="template-palette__copy">
+                  <strong>{{ blockLabel(block.type) }}</strong>
+                  <small>{{ blockDescription(block.type, block.description) }}</small>
+                </span>
+                <i class="el-icon-rank" aria-hidden="true"></i>
+              </button>
+            </draggable>
+          </div>
+        </aside>
+
+        <section class="template-canvas-panel">
+          <div class="template-canvas-panel__header">
+            <div>
+              <strong>{{ i18n.layoutCanvas }}</strong>
+              <small>{{ i18n.dragToReorder }}</small>
+            </div>
+            <span class="template-canvas-panel__paper">
+              {{ template.paperWidthMm }}mm · {{ printableWidthDots }} dots
+            </span>
+          </div>
+          <div class="template-canvas-scroll">
+            <div class="template-canvas"
+                 :class="'template-canvas--' + template.paperWidthMm">
+              <draggable v-model="definition.rows"
+                         handle=".template-row__drag"
+                         animation="160"
+                         class="template-row-list">
+                <div v-for="(row, rowIndex) in definition.rows"
+                     :key="row.id"
+                     class="template-row">
+                  <div class="template-row__toolbar">
+                    <button type="button"
+                            class="template-icon-button template-row__drag"
+                            :title="i18n.dragRow">
+                      <i class="el-icon-rank"></i>
+                    </button>
+                    <span>{{ i18n.rowLabel.replace('{0}', rowIndex + 1) }}</span>
+                    <span :class="{ 'is-error': rowWidth(row) > 10000 }">
+                      {{ rowWidth(row) / 100 }}%
+                    </span>
+                    <button type="button"
+                            class="template-icon-button"
+                            :title="i18n.deleteRow"
+                            @click="removeRow(rowIndex)">
+                      <i class="el-icon-delete"></i>
+                    </button>
+                  </div>
+                  <draggable v-model="row.blocks"
+                             :group="{ name: 'print-blocks', pull: true, put: true }"
+                             animation="160"
+                             class="template-row__blocks"
+                             :class="{ 'is-empty': row.blocks.length === 0, 'is-overflow': rowWidth(row) > 10000 }"
+                             @add="selectAddedBlock(row, $event)">
+                    <button v-for="block in row.blocks"
+                             :key="block.id"
+                             type="button"
+                             class="template-block"
+                             :class="blockCanvasClasses(block)"
+                            :style="{ width: block.widthBasisPoints / 100 + '%' }"
+                            @click="selectBlock(block)">
+                      <span class="template-block__name">{{ blockLabel(block.type) }}</span>
+                      <span class="template-block__width">{{ block.widthBasisPoints / 100 }}%</span>
+                    </button>
+                    <div v-if="row.blocks.length === 0" class="template-row__empty">
+                      {{ i18n.dropHere }}
+                    </div>
+                  </draggable>
+                </div>
+              </draggable>
+
+              <button type="button" class="template-add-row" @click="addRow">
+                <i class="el-icon-plus"></i>
+                {{ i18n.addRow }}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <aside class="template-panel template-panel--inspector">
+          <div class="template-panel__header">
+            <div>
+              <h2>{{ i18n.properties }}</h2>
+              <small v-if="selectedBlock">{{ blockLabel(selectedBlock.type) }}</small>
+              <small v-else>{{ i18n.configureSelected }}</small>
+            </div>
+          </div>
+          <div v-if="!selectedBlock" class="template-panel__empty">
+            <i class="el-icon-setting"></i>
+            <strong>{{ i18n.selectComponent }}</strong>
+            <span>{{ i18n.selectComponentHelp }}</span>
+          </div>
+          <div v-else class="template-panel__body template-inspector">
+            <el-form label-position="top" size="small">
+              <el-form-item :label="i18n.rowWidth">
+                <el-slider v-model="selectedWidthPercent"
+                           :min="5"
+                           :max="100"
+                           :step="5"
+                           show-input></el-slider>
+              </el-form-item>
+              <el-form-item :label="i18n.optional">
+                <el-switch v-model="selectedBlock.optional"></el-switch>
+              </el-form-item>
+
+              <template v-if="isBuiltInBlock(selectedBlock)">
+                <el-divider content-position="left">{{ i18n.typography }}</el-divider>
+                <el-form-item :label="i18n.textAlign">
+                  <el-radio-group v-model="selectedBlock.config.align" size="mini">
+                    <el-radio-button v-if="isTableBlock(selectedBlock)" label="AUTO">
+                      {{ i18n.byColumn }}
+                    </el-radio-button>
+                    <el-radio-button v-if="selectedBlock.type === 'core.total-amount'" label="JUSTIFY">
+                      {{ i18n.justify }}
+                    </el-radio-button>
+                    <el-radio-button label="LEFT">{{ i18n.left }}</el-radio-button>
+                    <el-radio-button label="CENTER">{{ i18n.center }}</el-radio-button>
+                    <el-radio-button label="RIGHT">{{ i18n.right }}</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
+                <el-form-item :label="i18n.bold">
+                  <el-switch v-model="selectedBlock.config.bold"
+                             :active-text="i18n.on"
+                             :inactive-text="i18n.off"></el-switch>
+                </el-form-item>
+                <el-form-item :label="i18n.fontSize">
+                  <el-radio-group v-model="selectedBlock.config.size" size="mini">
+                    <el-radio-button label="NORMAL">{{ i18n.normal }}</el-radio-button>
+                    <el-radio-button label="LARGE">{{ i18n.large }}</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
+              </template>
+
+              <template v-if="selectedBlock.type === 'core.title'">
+                <el-form-item :label="i18n.titleContent">
+                  <el-input v-model="selectedBlock.config.text" maxlength="200"></el-input>
+                </el-form-item>
+              </template>
+
+              <template v-else-if="isTableBlock(selectedBlock)">
+                <el-form-item>
+                  <el-checkbox v-model="selectedBlock.config.showHeader">{{ i18n.showHeader }}</el-checkbox>
+                </el-form-item>
+                <div class="detail-field-list">
+                  <div v-for="field in selectedDetailFieldOptions"
+                       :key="field.field"
+                       class="detail-field-list__item">
+                    <el-checkbox :value="detailFieldEnabled(field.field)"
+                                 @change="toggleDetailField(field, $event)">
+                      {{ field.title }}
+                    </el-checkbox>
+                  </div>
+                </div>
+                <div v-for="(column, columnIndex) in selectedBlock.config.columns"
+                     :key="column.field"
+                     class="detail-column">
+                  <div class="detail-column__header">
+                    <strong>{{ column.title }}</strong>
+                    <span>
+                      <el-button type="text"
+                                 icon="el-icon-top"
+                                 :title="i18n.moveUp"
+                                 :disabled="columnIndex === 0"
+                                 @click="moveDetailColumn(columnIndex, -1)"></el-button>
+                      <el-button type="text"
+                                 icon="el-icon-bottom"
+                                 :title="i18n.moveDown"
+                                 :disabled="columnIndex === selectedBlock.config.columns.length - 1"
+                                 @click="moveDetailColumn(columnIndex, 1)"></el-button>
+                    </span>
+                  </div>
+                  <el-input v-model="column.title" size="mini">
+                    <template slot="prepend">{{ i18n.columnTitle }}</template>
+                  </el-input>
+                  <el-input-number :value="column.widthBasisPoints / 100"
+                                   :min="5"
+                                   :max="100"
+                                   :step="5"
+                                   controls-position="right"
+                                   @change="setDetailColumnWidth(column, $event)"></el-input-number>
+                </div>
+                <div class="detail-column-total"
+                     :class="{ 'is-error': detailColumnTotal !== 10000 }">
+                  {{ i18n.columnWidthTotal }} {{ detailColumnTotal / 100 }}%
+                  <el-button type="text" @click="normalizeDetailWidths">{{ i18n.distributeEvenly }}</el-button>
+                </div>
+              </template>
+
+              <template v-else-if="selectedBlock.type === 'core.total-amount'">
+                <el-form-item :label="i18n.amountRows">
+                  <el-checkbox-group v-model="selectedBlock.config.rows"
+                                     @change="normalizeAmountRows(selectedBlock)">
+                    <el-checkbox label="total">{{ i18n.originalAmount }}</el-checkbox>
+                    <el-checkbox label="discount">{{ i18n.discountAmount }}</el-checkbox>
+                    <el-checkbox label="final">{{ i18n.amountDue }}</el-checkbox>
+                  </el-checkbox-group>
+                </el-form-item>
+              </template>
+
+              <template v-else-if="selectedBlock.type === 'core.settlement-qr'">
+                <el-form-item :label="i18n.qrField">
+                  <el-input v-model="selectedBlock.config.source"></el-input>
+                </el-form-item>
+                <el-form-item :label="i18n.caption">
+                  <el-input v-model="selectedBlock.config.caption" maxlength="80"></el-input>
+                </el-form-item>
+                <el-form-item :label="i18n.missingData">
+                  <el-select v-model="selectedBlock.config.missingData">
+                    <el-option :label="i18n.hideQr" value="HIDE"></el-option>
+                    <el-option :label="i18n.renderError" value="ERROR"></el-option>
+                  </el-select>
+                </el-form-item>
+              </template>
+
+              <el-form-item v-else :label="i18n.pluginConfigJson">
+                <el-input type="textarea"
+                          :rows="10"
+                          :value="JSON.stringify(selectedBlock.config, null, 2)"
+                          readonly></el-input>
+              </el-form-item>
+            </el-form>
+
+            <el-button type="danger"
+                       plain
+                       icon="el-icon-delete"
+                       class="template-inspector__delete"
+                       @click="removeSelectedBlock">{{ i18n.deleteBlock }}</el-button>
+          </div>
+        </aside>
+      </div>
+
+      <el-dialog :title="i18n.printPreview"
+                 :visible.sync="previewDialogVisible"
+                 custom-class="template-preview-dialog"
+                 width="560px"
+                 top="4vh"
+                 append-to-body>
+        <div class="template-preview__toolbar">
+          <span>{{ template.paperWidthMm }}mm {{ i18n.thermalPaper }} · {{ printableWidthDots }} dots</span>
+          <el-button type="text"
+                     icon="el-icon-refresh"
+                     :loading="previewing"
+                     @click="preview">{{ i18n.rerender }}</el-button>
+        </div>
+        <div class="template-preview__stage" v-loading="previewing">
+          <div v-if="!printDocument" class="template-preview__empty">{{ i18n.generatingPreview }}</div>
+          <div v-else
+               class="thermal-paper"
+               :class="'thermal-paper--' + template.paperWidthMm">
+            <div v-for="row in printDocument.rows" :key="row.id" class="thermal-row">
+              <div v-for="cell in row.cells"
+                   :key="cell.blockId"
+                   class="thermal-cell"
+                   :style="{ width: cell.widthBasisPoints / 100 + '%' }">
+                <template v-for="(element, elementIndex) in cell.elements">
+                  <div v-if="element.kind === 'TEXT'"
+                       :key="'text-' + elementIndex"
+                       class="thermal-text"
+                       :class="typographyClasses(element, 'LEFT')">
+                    {{ element.text }}
+                  </div>
+                  <div v-else-if="element.kind === 'TABLE'"
+                       :key="'table-' + elementIndex"
+                       class="thermal-table"
+                       :class="typographyClasses(element, 'AUTO')">
+                    <div v-if="element.showHeader"
+                         class="thermal-table__row is-header"
+                         :style="{ gridTemplateColumns: tableColumns(element) }">
+                      <span v-for="column in element.columns"
+                            :key="column.field"
+                            :class="'is-' + tableCellAlign(element, column).toLowerCase()">
+                        {{ column.title }}
+                      </span>
+                    </div>
+                    <div v-for="(detailRow, detailIndex) in element.rows"
+                         :key="detailIndex"
+                         class="thermal-table__row"
+                         :style="{ gridTemplateColumns: tableColumns(element) }">
+                      <span v-for="(cellValue, cellIndex) in detailRow.cells"
+                            :key="cellIndex"
+                            :class="'is-' + tableCellAlign(element, cellValue).toLowerCase()">
+                        {{ cellValue.text }}
+                      </span>
+                    </div>
+                  </div>
+                  <div v-else-if="element.kind === 'AMOUNT_ROWS'"
+                       :key="'amount-' + elementIndex"
+                       class="thermal-amounts"
+                       :class="typographyClasses(element, 'JUSTIFY')">
+                    <div v-for="amountRow in element.rows"
+                         :key="amountRow.key"
+                         class="thermal-amounts__row">
+                      <span>{{ amountRow.label }}</span>
+                      <span class="thermal-amounts__value">¥{{ amountRow.value }}</span>
+                    </div>
+                  </div>
+                  <div v-else-if="element.kind === 'QR' && !element.hidden"
+                       :key="'qr-' + elementIndex"
+                       class="thermal-qr"
+                       :class="typographyClasses(element, 'CENTER')">
+                    <qr-preview :value="element.payload"></qr-preview>
+                    <span v-if="element.caption">{{ element.caption }}</span>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </div>
+      </el-dialog>
+
+      <el-dialog :title="i18n.formattedJson"
+                 :visible.sync="jsonDialogVisible"
+                 width="72%"
+                 top="6vh">
+        <el-tabs v-model="jsonTab">
+          <el-tab-pane label="TemplateDefinition" name="template">
+            <pre class="template-json">{{ formattedDefinition }}</pre>
+          </el-tab-pane>
+          <el-tab-pane label="PrintDocument" name="document">
+            <pre class="template-json">{{ documentJson || i18n.previewFirst }}</pre>
+          </el-tab-pane>
+        </el-tabs>
+      </el-dialog>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+    <th:block th:replace="~{fragment/element-locale :: scripts}" />
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vuedraggable@2.24.3/dist/vuedraggable.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script th:inline="javascript">
+      var templateId = /*[[${templateId}]]*/ '';
+      var csrfToken = /*[[${_csrf.token}]]*/ '';
+      var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+      var editorI18n = {
+        isEnglish: /*[[${#locale.language == 'en'}]]*/ false,
+        published: /*[[#{printer-core.templates.status.PUBLISHED}]]*/ 'Published',
+        draft: /*[[#{printer-core.templates.status.DRAFT}]]*/ 'Draft',
+        paperWidth: /*[[#{printer-core.templates.paperWidth}]]*/ 'Paper Width',
+        preview: /*[[#{printer-core.editor.preview}]]*/ 'Preview',
+        save: /*[[#{printer-core.common.save}]]*/ 'Save',
+        publish: /*[[#{printer-core.editor.publish}]]*/ 'Publish',
+        validationTitle: /*[[#{printer-core.editor.validationTitle}]]*/ 'Template validation issues',
+        componentLibrary: /*[[#{printer-core.editor.componentLibrary}]]*/ 'Components',
+        dragToCanvas: /*[[#{printer-core.editor.dragToCanvas}]]*/ 'Drag components to the canvas',
+        layoutCanvas: /*[[#{printer-core.editor.layoutCanvas}]]*/ 'Layout Canvas',
+        dragToReorder: /*[[#{printer-core.editor.dragToReorder}]]*/ 'Drag rows and components to change print order',
+        dragRow: /*[[#{printer-core.editor.dragRow}]]*/ 'Drag row',
+        rowLabel: /*[[#{printer-core.editor.rowLabel}]]*/ 'Row {0}',
+        deleteRow: /*[[#{printer-core.editor.deleteRow}]]*/ 'Delete row',
+        dropHere: /*[[#{printer-core.editor.dropHere}]]*/ 'Drop a component here',
+        addRow: /*[[#{printer-core.editor.addRow}]]*/ 'Add Row',
+        properties: /*[[#{printer-core.editor.properties}]]*/ 'Properties',
+        configureSelected: /*[[#{printer-core.editor.configureSelected}]]*/ 'Configure selected component',
+        selectComponent: /*[[#{printer-core.editor.selectComponent}]]*/ 'Select a component',
+        selectComponentHelp: /*[[#{printer-core.editor.selectComponentHelp}]]*/ 'Select a component on the canvas to configure its content, style, and width.',
+        rowWidth: /*[[#{printer-core.editor.rowWidth}]]*/ 'Row Width',
+        optional: /*[[#{printer-core.editor.optional}]]*/ 'Skip When Missing',
+        typography: /*[[#{printer-core.editor.typography}]]*/ 'Typography',
+        textAlign: /*[[#{printer-core.editor.textAlign}]]*/ 'Text Alignment',
+        byColumn: /*[[#{printer-core.editor.byColumn}]]*/ 'By Column',
+        justify: /*[[#{printer-core.editor.justify}]]*/ 'Justify',
+        left: /*[[#{printer-core.editor.left}]]*/ 'Left',
+        center: /*[[#{printer-core.editor.center}]]*/ 'Center',
+        right: /*[[#{printer-core.editor.right}]]*/ 'Right',
+        bold: /*[[#{printer-core.editor.bold}]]*/ 'Bold',
+        on: /*[[#{printer-core.editor.on}]]*/ 'On',
+        off: /*[[#{printer-core.editor.off}]]*/ 'Off',
+        fontSize: /*[[#{printer-core.editor.fontSize}]]*/ 'Font Size',
+        normal: /*[[#{printer-core.editor.normal}]]*/ 'Normal',
+        large: /*[[#{printer-core.editor.large}]]*/ 'Large',
+        titleContent: /*[[#{printer-core.editor.titleContent}]]*/ 'Title Content',
+        showHeader: /*[[#{printer-core.editor.showHeader}]]*/ 'Show Header',
+        moveUp: /*[[#{printer-core.editor.moveUp}]]*/ 'Move Up',
+        moveDown: /*[[#{printer-core.editor.moveDown}]]*/ 'Move Down',
+        columnTitle: /*[[#{printer-core.editor.columnTitle}]]*/ 'Title',
+        columnWidthTotal: /*[[#{printer-core.editor.columnWidthTotal}]]*/ 'Column width total',
+        distributeEvenly: /*[[#{printer-core.editor.distributeEvenly}]]*/ 'Distribute Evenly',
+        amountRows: /*[[#{printer-core.editor.amountRows}]]*/ 'Amount Rows',
+        originalAmount: /*[[#{printer-core.editor.originalAmount}]]*/ 'Original Amount',
+        discountAmount: /*[[#{printer-core.editor.discountAmount}]]*/ 'Discount',
+        amountDue: /*[[#{printer-core.editor.amountDue}]]*/ 'Amount Due',
+        qrField: /*[[#{printer-core.editor.qrField}]]*/ 'QR Data Field',
+        caption: /*[[#{printer-core.editor.caption}]]*/ 'Caption',
+        missingData: /*[[#{printer-core.editor.missingData}]]*/ 'Missing Data',
+        hideQr: /*[[#{printer-core.editor.hideQr}]]*/ 'Hide QR block',
+        renderError: /*[[#{printer-core.editor.renderError}]]*/ 'Fail rendering',
+        pluginConfigJson: /*[[#{printer-core.editor.pluginConfigJson}]]*/ 'Plugin Configuration JSON',
+        deleteBlock: /*[[#{printer-core.editor.deleteBlock}]]*/ 'Delete Block',
+        printPreview: /*[[#{printer-core.editor.printPreview}]]*/ 'Print Preview',
+        thermalPaper: /*[[#{printer-core.editor.thermalPaper}]]*/ 'thermal paper',
+        rerender: /*[[#{printer-core.editor.rerender}]]*/ 'Render Again',
+        generatingPreview: /*[[#{printer-core.editor.generatingPreview}]]*/ 'Generating print preview',
+        formattedJson: /*[[#{printer-core.editor.formattedJson}]]*/ 'Formatted JSON',
+        previewFirst: /*[[#{printer-core.editor.previewFirst}]]*/ 'Run preview first',
+        blockTitle: /*[[#{printer-core.block.title}]]*/ 'Title',
+        blockTitleDescription: /*[[#{printer-core.block.title.description}]]*/ 'Store name, order number, or fixed title',
+        blockDetails: /*[[#{printer-core.block.details}]]*/ 'Order Details',
+        blockDetailsDescription: /*[[#{printer-core.block.details.description}]]*/ 'Configurable item, quantity, price, subtotal, and remark columns',
+        blockKitchen: /*[[#{printer-core.block.kitchen}]]*/ 'Kitchen Items',
+        blockKitchenDescription: /*[[#{printer-core.block.kitchen.description}]]*/ 'Number, item, specification, remark, and quantity for the kitchen',
+        blockTotal: /*[[#{printer-core.block.total}]]*/ 'Total Amount',
+        blockTotalDescription: /*[[#{printer-core.block.total.description}]]*/ 'Original amount, discount, and amount due',
+        blockQr: /*[[#{printer-core.block.qr}]]*/ 'Settlement QR',
+        blockQrDescription: /*[[#{printer-core.block.qr.description}]]*/ 'Generate a settlement QR from a data field',
+        fieldNumber: /*[[#{printer-core.field.number}]]*/ 'Number',
+        fieldItem: /*[[#{printer-core.field.item}]]*/ 'Item',
+        fieldQuantity: /*[[#{printer-core.field.quantity}]]*/ 'Qty',
+        fieldUnitPrice: /*[[#{printer-core.field.unitPrice}]]*/ 'Unit Price',
+        fieldSubtotal: /*[[#{printer-core.field.subtotal}]]*/ 'Subtotal',
+        fieldRemark: /*[[#{printer-core.field.remark}]]*/ 'Remark',
+        fieldSpecification: /*[[#{printer-core.field.specification}]]*/ 'Specification',
+        scanToPay: /*[[#{printer-core.editor.scanToPay}]]*/ 'Scan to Pay',
+        loadFailed: /*[[#{printer-core.editor.loadFailed}]]*/ 'Failed to load template',
+        draftSaved: /*[[#{printer-core.editor.draftSaved}]]*/ 'Template draft saved',
+        saveFailed: /*[[#{printer-core.editor.saveFailed}]]*/ 'Failed to save template',
+        publishedMessage: /*[[#{printer-core.editor.publishedMessage}]]*/ 'Template published as v{0}',
+        publishFailed: /*[[#{printer-core.editor.publishFailed}]]*/ 'Failed to publish template',
+        previewFailed: /*[[#{printer-core.editor.previewFailed}]]*/ 'Preview failed',
+        invalidConfiguration: /*[[#{printer-core.editor.invalidConfiguration}]]*/ 'Invalid configuration'
+      };
+
+      axios.defaults.baseURL = '/admin/plugins/printer-core';
+      axios.defaults.headers.common[csrfHeader] = csrfToken;
+      Vue.component('draggable', window.vuedraggable);
+      Vue.component('qr-preview', {
+        props: ['value'],
+        template: '<div class="thermal-qr__code" ref="code"></div>',
+        mounted: function () {
+          this.renderCode();
+        },
+        watch: {
+          value: function () {
+            this.renderCode();
+          }
+        },
+        methods: {
+          renderCode: function () {
+            var self = this;
+            this.$nextTick(function () {
+              self.$refs.code.innerHTML = '';
+              if (!self.value || !window.QRCode) return;
+              new QRCode(self.$refs.code, {
+                text: self.value,
+                width: 92,
+                height: 92,
+                correctLevel: QRCode.CorrectLevel.M
+              });
+            });
+          }
+        }
+      });
+
+      new Vue({
+        el: '#app-template-editor',
+        data: {
+          i18n: editorI18n,
+          loading: true,
+          saving: false,
+          publishing: false,
+          previewing: false,
+          template: {
+            id: templateId,
+            code: '',
+            name: '',
+            paperWidthMm: 58,
+            status: 'DRAFT',
+            draftRevision: 1,
+            publishedVersion: null
+          },
+          definition: {
+            schemaVersion: 1,
+            paper: { widthMm: 58, dpi: 203, printableWidthDots: 384 },
+            rows: []
+          },
+          blockCatalog: [],
+          selectedBlockId: null,
+          printDocument: null,
+          documentJson: '',
+          violations: [],
+          previewDialogVisible: false,
+          jsonDialogVisible: false,
+          jsonTab: 'template',
+          detailFieldOptions: [
+            { field: 'itemName', title: editorI18n.fieldItem, widthBasisPoints: 4000, align: 'LEFT', overflow: 'WRAP' },
+            { field: 'quantity', title: editorI18n.fieldQuantity, widthBasisPoints: 1500, align: 'RIGHT', overflow: 'CLIP' },
+            { field: 'unitPrice', title: editorI18n.fieldUnitPrice, widthBasisPoints: 2000, align: 'RIGHT', overflow: 'CLIP', format: 'MONEY' },
+            { field: 'subtotal', title: editorI18n.fieldSubtotal, widthBasisPoints: 2000, align: 'RIGHT', overflow: 'CLIP', format: 'MONEY' },
+            { field: 'remark', title: editorI18n.fieldRemark, widthBasisPoints: 1500, align: 'LEFT', overflow: 'WRAP' }
+          ],
+          kitchenFieldOptions: [
+            { field: 'number', title: editorI18n.fieldNumber, widthBasisPoints: 2000, align: 'LEFT', overflow: 'WRAP' },
+            { field: 'itemName', title: editorI18n.fieldItem, widthBasisPoints: 3000, align: 'LEFT', overflow: 'WRAP' },
+            { field: 'specification', title: editorI18n.fieldSpecification, widthBasisPoints: 2000, align: 'LEFT', overflow: 'WRAP' },
+            { field: 'remark', title: editorI18n.fieldRemark, widthBasisPoints: 2000, align: 'LEFT', overflow: 'WRAP' },
+            { field: 'quantity', title: editorI18n.fieldQuantity, widthBasisPoints: 1000, align: 'RIGHT', overflow: 'CLIP' }
+          ]
+        },
+        computed: {
+          selectedBlock: function () {
+            for (var rowIndex = 0; rowIndex < this.definition.rows.length; rowIndex++) {
+              var blocks = this.definition.rows[rowIndex].blocks;
+              for (var blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
+                if (blocks[blockIndex].id === this.selectedBlockId) {
+                  return blocks[blockIndex];
+                }
+              }
+            }
+            return null;
+          },
+          selectedWidthPercent: {
+            get: function () {
+              return this.selectedBlock ? this.selectedBlock.widthBasisPoints / 100 : 100;
+            },
+            set: function (value) {
+              if (this.selectedBlock) {
+                this.selectedBlock.widthBasisPoints = Math.round(Number(value) * 100);
+              }
+            }
+          },
+          detailColumnTotal: function () {
+            if (!this.isTableBlock(this.selectedBlock)) return 0;
+            return this.selectedBlock.config.columns.reduce(function (total, column) {
+              return total + Number(column.widthBasisPoints || 0);
+            }, 0);
+          },
+          selectedDetailFieldOptions: function () {
+            return this.selectedBlock && this.selectedBlock.type === 'core.kitchen-items'
+              ? this.kitchenFieldOptions
+              : this.detailFieldOptions;
+          },
+          printableWidthDots: function () {
+            return this.template.paperWidthMm === 80 ? 576 : 384;
+          },
+          formattedDefinition: function () {
+            return JSON.stringify(this.definition, null, 2);
+          }
+        },
+        created: function () {
+          this.loadEditor();
+        },
+        methods: {
+          loadEditor: function () {
+            var self = this;
+            this.loading = true;
+            Promise.all([
+              axios.get('/templates/' + templateId + '/definition'),
+              axios.get('/template-blocks')
+            ]).then(function (responses) {
+              var detail = responses[0].data;
+              self.template = {
+                id: detail.id,
+                code: detail.code,
+                name: detail.name,
+                paperWidthMm: detail.paperWidthMm,
+                status: detail.status,
+                draftRevision: detail.draftRevision,
+                publishedVersion: detail.publishedVersion
+              };
+              self.definition = detail.definition;
+              self.blockCatalog = responses[1].data;
+              self.applyBlockDefaults();
+              if (!self.definition.rows.length) {
+                self.addRow();
+              }
+              self.preview();
+            }).catch(function (error) {
+              self.$message.error(self.errorMessage(error, self.i18n.loadFailed));
+            }).finally(function () {
+              self.loading = false;
+            });
+          },
+          cloneBlock: function (descriptor) {
+            return {
+              id: this.uniqueId('block'),
+              type: descriptor.type,
+              provider: descriptor.provider,
+              providerVersion: descriptor.version,
+              widthBasisPoints: descriptor.defaultWidthBasisPoints,
+              optional: false,
+              config: this.localizedBlockConfig(descriptor.type, this.deepClone(descriptor.defaultConfig || {}))
+            };
+          },
+          addRow: function () {
+            this.definition.rows.push({
+              id: this.uniqueId('row'),
+              blocks: []
+            });
+          },
+          removeRow: function (rowIndex) {
+            var row = this.definition.rows[rowIndex];
+            if (row.blocks.some(function (block) { return block.id === this.selectedBlockId; }.bind(this))) {
+              this.selectedBlockId = null;
+            }
+            this.definition.rows.splice(rowIndex, 1);
+            if (!this.definition.rows.length) {
+              this.addRow();
+            }
+          },
+          selectAddedBlock: function (row, event) {
+            var block = row.blocks[event.newIndex];
+            this.selectedBlockId = block ? block.id : null;
+          },
+          selectBlock: function (block) {
+            this.selectedBlockId = block.id;
+          },
+          removeSelectedBlock: function () {
+            for (var rowIndex = 0; rowIndex < this.definition.rows.length; rowIndex++) {
+              var blocks = this.definition.rows[rowIndex].blocks;
+              var blockIndex = blocks.findIndex(function (block) {
+                return block.id === this.selectedBlockId;
+              }.bind(this));
+              if (blockIndex >= 0) {
+                blocks.splice(blockIndex, 1);
+                this.selectedBlockId = null;
+                return;
+              }
+            }
+          },
+          rowWidth: function (row) {
+            return row.blocks.reduce(function (total, block) {
+              return total + Number(block.widthBasisPoints || 0);
+            }, 0);
+          },
+          changePaperWidth: function (paperWidth) {
+            this.definition.paper.widthMm = paperWidth;
+            this.definition.paper.dpi = 203;
+            this.definition.paper.printableWidthDots = paperWidth === 80 ? 576 : 384;
+          },
+          blockLabel: function (type) {
+            var labels = {
+              'core.title': this.i18n.blockTitle,
+              'core.order-details': this.i18n.blockDetails,
+              'core.kitchen-items': this.i18n.blockKitchen,
+              'core.total-amount': this.i18n.blockTotal,
+              'core.settlement-qr': this.i18n.blockQr
+            };
+            if (labels[type]) return labels[type];
+            var descriptor = this.blockCatalog.find(function (item) { return item.type === type; });
+            return descriptor ? descriptor.label : type;
+          },
+          blockDescription: function (type, fallback) {
+            return {
+              'core.title': this.i18n.blockTitleDescription,
+              'core.order-details': this.i18n.blockDetailsDescription,
+              'core.kitchen-items': this.i18n.blockKitchenDescription,
+              'core.total-amount': this.i18n.blockTotalDescription,
+              'core.settlement-qr': this.i18n.blockQrDescription
+            }[type] || fallback;
+          },
+          localizedBlockConfig: function (type, config) {
+            var fieldTitles = {
+              number: this.i18n.fieldNumber,
+              itemName: this.i18n.fieldItem,
+              quantity: this.i18n.fieldQuantity,
+              unitPrice: this.i18n.fieldUnitPrice,
+              subtotal: this.i18n.fieldSubtotal,
+              remark: this.i18n.fieldRemark,
+              specification: this.i18n.fieldSpecification
+            };
+            if (config && Array.isArray(config.columns)) {
+              config.columns.forEach(function (column) {
+                var knownDefaults = {
+                  number: ['\u7f16\u53f7', 'Number'],
+                  itemName: ['\u5546\u54c1', '\u83dc\u54c1', 'Item'],
+                  quantity: ['\u6570\u91cf', 'Qty'],
+                  unitPrice: ['\u5355\u4ef7', 'Unit Price'],
+                  subtotal: ['\u5c0f\u8ba1', 'Subtotal'],
+                  remark: ['\u5907\u6ce8', 'Remark'],
+                  specification: ['\u89c4\u683c', 'Specification']
+                }[column.field] || [];
+                if (fieldTitles[column.field] && knownDefaults.indexOf(column.title) >= 0) {
+                  column.title = fieldTitles[column.field];
+                }
+              });
+            }
+            if (type === 'core.settlement-qr' && config && (!config.caption || config.caption === '\u626b\u7801\u7ed3\u8d26' || config.caption === 'Scan to Pay')) {
+              config.caption = this.i18n.scanToPay;
+            }
+            return config;
+          },
+          blockIcon: function (type) {
+            if (type === 'core.title') return 'el-icon-edit-outline';
+            if (type === 'core.order-details') return 'el-icon-s-grid';
+            if (type === 'core.kitchen-items') return 'el-icon-dish';
+            if (type === 'core.total-amount') return 'el-icon-money';
+            if (type === 'core.settlement-qr') return 'el-icon-full-screen';
+            return 'el-icon-box';
+          },
+          isBuiltInBlock: function (block) {
+            return block && [
+              'core.title',
+              'core.order-details',
+              'core.kitchen-items',
+              'core.total-amount',
+              'core.settlement-qr'
+            ].indexOf(block.type) >= 0;
+          },
+          isTableBlock: function (block) {
+            return block && ['core.order-details', 'core.kitchen-items'].indexOf(block.type) >= 0;
+          },
+          blockCanvasClasses: function (block) {
+            var config = block.config || {};
+            var align = String(config.align || 'CENTER');
+            if (align === 'AUTO') align = 'LEFT';
+            return [
+              'is-align-' + align.toLowerCase(),
+              {
+                'is-selected': this.selectedBlockId === block.id,
+                'is-bold': Boolean(config.bold),
+                'is-large': config.size === 'LARGE'
+              }
+            ];
+          },
+          applyBlockDefaults: function () {
+            var self = this;
+            this.definition.rows.forEach(function (row) {
+              row.blocks.forEach(function (block) {
+                var descriptor = self.blockCatalog.find(function (item) {
+                  return item.type === block.type;
+                });
+                if (!block.config || typeof block.config !== 'object') {
+                  self.$set(block, 'config', {});
+                }
+                if (descriptor && descriptor.defaultConfig) {
+                  Object.keys(descriptor.defaultConfig).forEach(function (key) {
+                    if (typeof block.config[key] === 'undefined') {
+                      self.$set(block.config, key, self.deepClone(descriptor.defaultConfig[key]));
+                    }
+                  });
+                }
+                if (block.type === 'core.total-amount') {
+                  self.normalizeAmountRows(block);
+                }
+                self.localizedBlockConfig(block.type, block.config);
+              });
+            });
+          },
+          normalizeAmountRows: function (block) {
+            if (!block || block.type !== 'core.total-amount') return;
+            var current = Array.isArray(block.config.rows) ? block.config.rows : [];
+            var order = ['total', 'discount', 'final'];
+            var normalized = order.filter(function (key) {
+              return current.indexOf(key) >= 0;
+            });
+            current.forEach(function (key) {
+              if (normalized.indexOf(key) < 0) normalized.push(key);
+            });
+            this.$set(block.config, 'rows', normalized.length ? normalized : ['final']);
+          },
+          typographyClasses: function (element, defaultAlign) {
+            return [
+              'is-' + String(element.align || defaultAlign).toLowerCase(),
+              {
+                'is-large': element.size === 'LARGE',
+                'is-bold': Boolean(element.bold)
+              }
+            ];
+          },
+          tableCellAlign: function (element, cell) {
+            var align = String(element.align || 'AUTO');
+            return align === 'AUTO' ? String(cell.align || 'LEFT') : align;
+          },
+          detailFieldEnabled: function (field) {
+            if (!this.selectedBlock || !this.selectedBlock.config.columns) return false;
+            return this.selectedBlock.config.columns.some(function (column) {
+              return column.field === field;
+            });
+          },
+          toggleDetailField: function (field, enabled) {
+            var columns = this.selectedBlock.config.columns;
+            var index = columns.findIndex(function (column) { return column.field === field.field; });
+            if (enabled && index < 0) {
+              columns.push(this.deepClone(field));
+            } else if (!enabled && index >= 0) {
+              columns.splice(index, 1);
+            }
+            this.normalizeDetailWidths();
+          },
+          moveDetailColumn: function (index, direction) {
+            var columns = this.selectedBlock.config.columns;
+            var target = index + direction;
+            if (target < 0 || target >= columns.length) return;
+            var column = columns.splice(index, 1)[0];
+            columns.splice(target, 0, column);
+          },
+          setDetailColumnWidth: function (column, value) {
+            column.widthBasisPoints = Math.round(Number(value || 0) * 100);
+          },
+          normalizeDetailWidths: function () {
+            if (!this.selectedBlock || !this.selectedBlock.config.columns.length) return;
+            var columns = this.selectedBlock.config.columns;
+            var base = Math.floor(10000 / columns.length);
+            columns.forEach(function (column, index) {
+              column.widthBasisPoints = index === columns.length - 1
+                ? 10000 - base * (columns.length - 1)
+                : base;
+            });
+          },
+          tableColumns: function (element) {
+            return element.columns.map(function (column) {
+              return (column.widthBasisPoints / 100) + '%';
+            }).join(' ');
+          },
+          saveDraft: function (showMessage) {
+            var self = this;
+            this.saving = true;
+            this.violations = [];
+            return axios.put('/templates/' + templateId + '/draft', {
+              code: this.template.code,
+              name: this.template.name,
+              paperWidthMm: this.template.paperWidthMm,
+              draftRevision: this.template.draftRevision,
+              definition: this.definition
+            }).then(function (response) {
+              self.applyDetail(response.data);
+              if (showMessage) {
+                self.$message.success(self.i18n.draftSaved);
+              }
+              return response.data;
+            }).catch(function (error) {
+              self.captureViolations(error);
+              self.$message.error(self.errorMessage(error, self.i18n.saveFailed));
+              error.__messageShown = true;
+              return Promise.reject(error);
+            }).finally(function () {
+              self.saving = false;
+            });
+          },
+          publishTemplate: function () {
+            var self = this;
+            this.publishing = true;
+            this.saveDraft(false).then(function () {
+              return axios.post('/templates/' + templateId + '/publish');
+            }).then(function (response) {
+              self.applyDetail(response.data);
+              self.$message.success(self.i18n.publishedMessage.replace('{0}', response.data.publishedVersion));
+              return self.preview();
+            }).catch(function (error) {
+              self.captureViolations(error);
+              if (!error.__messageShown) {
+                self.$message.error(self.errorMessage(error, self.i18n.publishFailed));
+              }
+            }).finally(function () {
+              self.publishing = false;
+            });
+          },
+          openPreview: function () {
+            this.previewDialogVisible = true;
+            return this.preview();
+          },
+          preview: function () {
+            var self = this;
+            this.previewing = true;
+            this.violations = [];
+            return axios.post('/templates/preview', {
+              paperWidthMm: this.template.paperWidthMm,
+              definition: this.definition,
+              data: null
+            }).then(function (response) {
+              self.printDocument = response.data.document;
+              self.documentJson = response.data.documentJson;
+              self.violations = self.localizedViolations(response.data.violations || []);
+            }).catch(function (error) {
+              self.captureViolations(error);
+              self.$message.error(self.errorMessage(error, self.i18n.previewFailed));
+            }).finally(function () {
+              self.previewing = false;
+            });
+          },
+          applyDetail: function (detail) {
+            this.template.code = detail.code;
+            this.template.name = detail.name;
+            this.template.paperWidthMm = detail.paperWidthMm;
+            this.template.status = detail.status;
+            this.template.draftRevision = detail.draftRevision;
+            this.template.publishedVersion = detail.publishedVersion;
+            this.definition = detail.definition;
+          },
+          captureViolations: function (error) {
+            if (error.response && error.response.data && error.response.data.violations) {
+              this.violations = this.localizedViolations(error.response.data.violations);
+            }
+          },
+          localizedViolations: function (violations) {
+            return (violations || []).map(function (violation) {
+              return editorI18n.isEnglish
+                ? Object.assign({}, violation, { message: editorI18n.invalidConfiguration })
+                : violation;
+            });
+          },
+          errorMessage: function (error, fallback) {
+            return !this.i18n.isEnglish && error.response && error.response.data && error.response.data.message
+              ? error.response.data.message
+              : fallback;
+          },
+          uniqueId: function (prefix) {
+            if (window.crypto && window.crypto.randomUUID) {
+              return prefix + '-' + window.crypto.randomUUID();
+            }
+            return prefix + '-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+          },
+          deepClone: function (value) {
+            return JSON.parse(JSON.stringify(value));
+          },
+          goBack: function () {
+            window.location.href = '/admin/plugins/printer-core/templates';
+          }
+        }
+      });
+    </script>
+  </main>
+</body>
+</html>

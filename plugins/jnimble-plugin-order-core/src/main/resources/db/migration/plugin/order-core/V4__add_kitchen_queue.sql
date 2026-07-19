@@ -1,0 +1,28 @@
+CREATE TABLE IF NOT EXISTS ord_kitchen_queue_item (
+    id              BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id        BIGINT        NOT NULL COMMENT 'Order ID',
+    order_item_id   BIGINT        NOT NULL COMMENT 'Order item ID',
+    menu_item_id    BIGINT        NULL COMMENT 'Menu item ID snapshot',
+    table_id        BIGINT        NULL COMMENT 'Table ID snapshot',
+    session_id      BIGINT        NULL COMMENT 'Ordering session ID snapshot',
+    order_no        VARCHAR(32)   NOT NULL COMMENT 'Order number snapshot',
+    source          VARCHAR(20)   NOT NULL DEFAULT 'LEGACY' COMMENT 'Ordering source snapshot',
+    item_name       VARCHAR(200)  NOT NULL COMMENT 'Dish name snapshot',
+    specification   VARCHAR(500)  NULL COMMENT 'Specification snapshot',
+    remark          VARCHAR(500)  NULL COMMENT 'Kitchen remark snapshot',
+    quantity        INT           NOT NULL COMMENT 'Quantity snapshot',
+    dispatch_mode   VARCHAR(20)   NOT NULL DEFAULT 'PAPERLESS' COMMENT 'PAPERLESS, PRINT',
+    status          VARCHAR(20)   NOT NULL DEFAULT 'WAITING' COMMENT 'WAITING, COOKING, COMPLETED, PRINTED',
+    print_job_id    VARCHAR(64)   NULL COMMENT 'Created print job ID',
+    confirmed_at    DATETIME      NOT NULL COMMENT 'Order confirmation time',
+    started_at      DATETIME      NULL COMMENT 'Cooking start time',
+    completed_at    DATETIME      NULL COMMENT 'Cooking completion time',
+    printed_at      DATETIME      NULL COMMENT 'Print job creation time',
+    created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_kitchen_queue_order_item (order_item_id),
+    INDEX idx_kitchen_queue_order (order_id),
+    INDEX idx_kitchen_queue_work (dispatch_mode, status, confirmed_at),
+    INDEX idx_kitchen_queue_menu (menu_item_id)
+) COMMENT 'Kitchen production queue item';
+

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-CN"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title th:text="#{printer-core.printers.title}">Printer Management</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/theme-chalk/index.css">
+  <style>
+    [v-cloak] { display: none; }
+    .app-printers { padding: 20px; }
+    .app-printers .el-table { margin-top: 16px; }
+    .app-printers .filter-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+<h1 layout:fragment="page-title" th:text="#{printer-core.printers.title}">Printer Management</h1>
+<main layout:fragment="content">
+  <div id="app-printers" class="app-printers" v-cloak>
+    <div class="filter-bar">
+      <el-button type="primary" style="margin-left:auto" @click="openDialog(null)" th:text="#{printer-core.printers.add}">Add Printer</el-button>
+    </div>
+
+    <el-table :data="printers" border stripe style="width:100%">
+      <el-table-column prop="name" label="Name" min-width="140" th:attr="label=#{printer-core.printers.name}"></el-table-column>
+      <el-table-column prop="type" label="Type" width="100" align="center" th:attr="label=#{printer-core.printers.type}">
+        <template slot-scope="scope">
+          <el-tag :type="scope.row.type === 'RECEIPT' ? '' : 'warning'" size="small">{{ scope.row.type }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="driverId" label="Driver" width="120" th:attr="label=#{printer-core.printers.driver}"></el-table-column>
+      <el-table-column label="Enabled" width="90" align="center" th:attr="label=#{printer-core.printers.enabled}">
+        <template slot-scope="scope">
+          <el-tag :type="scope.row.enabled ? 'success' : 'info'" size="small">{{ scope.row.enabled ? i18n.yes : i18n.no }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="sortOrder" label="Sort" width="80" align="center" th:attr="label=#{printer-core.printers.sort}"></el-table-column>
+      <el-table-column label="Last Heartbeat" width="160" th:attr="label=#{printer-core.printers.lastHeartbeat}">
+        <template slot-scope="scope">{{ scope.row.lastHeartbeatAt || '-' }}</template>
+      </el-table-column>
+      <el-table-column label="Actions" width="150" align="center" th:attr="label=#{printer-core.common.actions}">
+        <template slot-scope="scope">
+          <el-button size="mini" type="primary" plain @click="openDialog(scope.row)">{{ i18n.edit }}</el-button>
+          <el-button size="mini" type="danger" plain @click="handleDelete(scope.row)">{{ i18n.delete }}</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+
+    <el-dialog :title="editingId ? i18n.editTitle : i18n.addTitle" :visible.sync="dialogVisible" width="500px">
+      <el-form ref="formRef" :model="form" label-width="100px" size="small">
+        <el-form-item :label="i18n.name" prop="name" :rules="[{required:true,message:i18n.nameRequired}]">
+          <el-input v-model="form.name" maxlength="100"></el-input>
+        </el-form-item>
+        <el-form-item :label="i18n.driver" prop="driverId" :rules="[{required:true,message:i18n.driverRequired}]">
+          <el-select v-model="form.driverId" style="width:100%">
+            <el-option v-for="d in drivers" :key="d.driverId" :label="driverName(d)" :value="d.driverId"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="i18n.type" prop="type">
+          <el-select v-model="form.type" style="width:100%">
+            <el-option label="RECEIPT" value="RECEIPT"></el-option>
+            <el-option label="KITCHEN" value="KITCHEN"></el-option>
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="i18n.enabled">
+          <el-switch v-model="form.enabled"></el-switch>
+        </el-form-item>
+        <el-form-item :label="i18n.sort">
+          <el-input-number v-model="form.sortOrder" :min="0" :max="9999"></el-input-number>
+        </el-form-item>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="dialogVisible = false">{{ i18n.cancel }}</el-button>
+        <el-button type="primary" @click="handleSave" :loading="saving">{{ i18n.save }}</el-button>
+      </span>
+    </el-dialog>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@2/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-ui@2.15/lib/index.js"></script>
+  <th:block th:replace="~{fragment/element-locale :: scripts}" />
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script th:inline="javascript">
+    var csrfToken = /*[[${_csrf.token}]]*/ '';
+    var csrfHeader = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    axios.defaults.baseURL = '/admin/plugins/printer-core';
+    axios.defaults.headers.common[csrfHeader] = csrfToken;
+
+    new Vue({
+      el: '#app-printers',
+      data: {
+        i18n: {
+          yes: /*[[#{printer-core.common.yes}]]*/ 'Yes', no: /*[[#{printer-core.common.no}]]*/ 'No',
+          edit: /*[[#{printer-core.common.edit}]]*/ 'Edit', delete: /*[[#{printer-core.common.delete}]]*/ 'Delete',
+          editTitle: /*[[#{printer-core.printers.edit}]]*/ 'Edit Printer', addTitle: /*[[#{printer-core.printers.add}]]*/ 'Add Printer',
+          name: /*[[#{printer-core.printers.name}]]*/ 'Printer Name', driver: /*[[#{printer-core.printers.driver}]]*/ 'Driver',
+          type: /*[[#{printer-core.printers.type}]]*/ 'Type', enabled: /*[[#{printer-core.printers.enabled}]]*/ 'Enabled',
+          sort: /*[[#{printer-core.printers.sort}]]*/ 'Sort', cancel: /*[[#{printer-core.common.cancel}]]*/ 'Cancel',
+          save: /*[[#{printer-core.common.save}]]*/ 'Save', nameRequired: /*[[#{printer-core.printers.nameRequired}]]*/ 'Enter a name',
+          driverRequired: /*[[#{printer-core.printers.driverRequired}]]*/ 'Select a driver', updated: /*[[#{printer-core.printers.updated}]]*/ 'Printer updated',
+          added: /*[[#{printer-core.printers.added}]]*/ 'Printer added', operationFailed: /*[[#{printer-core.common.operationFailed}]]*/ 'Operation failed',
+          deleteConfirm: /*[[#{printer-core.printers.deleteConfirm}]]*/ 'Delete printer "{0}"?', confirmTitle: /*[[#{printer-core.common.confirmTitle}]]*/ 'Confirmation',
+          confirm: /*[[#{printer-core.common.confirm}]]*/ 'Confirm', deleted: /*[[#{printer-core.printers.deleted}]]*/ 'Printer deleted',
+          deleteFailed: /*[[#{printer-core.printers.deleteFailed}]]*/ 'Failed to delete printer', feieDriver: /*[[#{printer-core.driver.feie}]]*/ 'Feie Cloud Printer'
+        },
+        printers: [],
+        drivers: [],
+        dialogVisible: false,
+        editingId: null,
+        saving: false,
+        form: { name: '', driverId: '', type: 'RECEIPT', enabled: true, sortOrder: 0 }
+      },
+      mounted: function () { this.fetchDrivers(); this.fetchPrinters(); },
+      methods: {
+        driverName: function (driver) {
+          return driver && String(driver.driverId || '').toLowerCase().indexOf('feie') >= 0
+            ? this.i18n.feieDriver : driver.driverName;
+        },
+        fetchDrivers: function () {
+          var self = this;
+          axios.get('/printers/drivers').then(function (r) { self.drivers = r.data; });
+        },
+        fetchPrinters: function () {
+          var self = this;
+          axios.get('/printers/list').then(function (r) { self.printers = r.data; });
+        },
+        openDialog: function (row) {
+          this.editingId = row ? row.id : null;
+          this.form = row ? {
+            name: row.name, driverId: row.driverId,
+            type: row.type || 'RECEIPT',
+            enabled: row.enabled !== false,
+            sortOrder: row.sortOrder || 0
+          } : { name: '', driverId: '', type: 'RECEIPT', enabled: true, sortOrder: 0 };
+          this.dialogVisible = true;
+          this.$nextTick(function () {
+            if (this.$refs.formRef) this.$refs.formRef.clearValidate();
+          }.bind(this));
+        },
+        handleSave: function () {
+          var self = this;
+          this.$refs.formRef.validate(function (valid) {
+            if (!valid) return;
+            self.saving = true;
+            var promise = self.editingId
+              ? axios.put('/printers/' + self.editingId, self.form)
+              : axios.post('/printers', self.form);
+            promise.then(function (r) {
+              if (r.data.success) {
+                self.$message.success(self.editingId ? self.i18n.updated : self.i18n.added);
+                self.dialogVisible = false;
+                self.fetchPrinters();
+              }
+            }).catch(function () { self.$message.error(self.i18n.operationFailed); })
+              .finally(function () { self.saving = false; });
+          });
+        },
+        handleDelete: function (row) {
+          var self = this;
+          this.$confirm(this.i18n.deleteConfirm.replace('{0}', row.name), this.i18n.confirmTitle, {
+            confirmButtonText: this.i18n.confirm, cancelButtonText: this.i18n.cancel, type: 'warning'
+          }).then(function () {
+            axios.delete('/printers/' + row.id).then(function (r) {
+              if (r.data.success) { self.$message.success(self.i18n.deleted); self.fetchPrinters(); }
+            }).catch(function () { self.$message.error(self.i18n.deleteFailed); });
+          }).catch(function () {});
+        }
+      }
+    });
+  </script>
+</main>
+</html>
