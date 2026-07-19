@@ -1,57 +1,77 @@
 # jnimble-order-plugin
 
-JNimble 业务插件集合 — 基于 [JNimble](https://github.com/what123/JNimble) 插件化后台框架开发,聚合了点餐、支付、打印、菜单、CRM、License 等多个业务插件。
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Java](https://img.shields.io/badge/java-21-blue.svg)](https://adoptium.net/)
+[![Maven](https://img.shields.io/badge/maven-3.9+-blue.svg)](https://maven.apache.org/)
+[![Based on JNimble](https://img.shields.io/badge/based%20on-JNimble-blue.svg)](https://github.com/what123/JNimble)
 
-仓库结构:
+English | [中文](README_CN.md)
+
+> **Built on [JNimble](https://github.com/what123/JNimble)** — a plugin-driven Java admin framework. This repository aggregates a set of business plugins (ordering, payment, printing, menu, CRM, license issuer, etc.) developed on top of JNimble. The framework is referenced as a git submodule under `jnimble-framework/`, pinned to a specific commit of `what123/JNimble`.
+
+## Overview
+
+`jnimble-order-plugin` is a multi-plugin Maven reactor that ships vertical business capabilities for the JNimble admin framework. Instead of modifying the framework source, every feature is delivered as an independent plugin JAR — install to use, uninstall to remove.
+
+Bundled plugins:
+
+| Plugin | Description |
+|--------|-------------|
+| `jnimble-plugin-order-core` | Order management core (kitchen queue, order state machine) |
+| `jnimble-plugin-order-table` | Table-based ordering (table map, seat routing) |
+| `jnimble-plugin-payment` | Payment aggregation and reconciliation |
+| `jnimble-plugin-printer-core` | Printer abstraction and template registry |
+| `jnimble-plugin-printer-feie` | Feie (飞鹅) cloud printer driver |
+| `jnimble-plugin-menu-manager` | Menu / product / spec management |
+| `jnimble-plugin-demo-crm` | Demo CRM plugin (reference for hook/route/asset registration) |
+| `jnimble-plugin-license-issuer` | License issuer UI + key management (admin side of `jnimble-license-sdk`) |
+
+## Repository Layout
 
 ```
 jnimble-order-plugin/
-├── jnimble-framework/      # 主框架 submodule(what123/JNimble)
-└── plugins/               # 业务插件聚合(pom)
-    ├── jnimble-plugin-demo-crm
-    ├── jnimble-plugin-license-issuer
-    ├── jnimble-plugin-menu-manager
-    ├── jnimble-plugin-order-core
-    ├── jnimble-plugin-order-table
-    ├── jnimble-plugin-payment
-    ├── jnimble-plugin-printer-core
-    └── jnimble-plugin-printer-feie
+├── jnimble-framework/      # upstream framework submodule (what123/JNimble, pinned commit)
+└── plugins/               # business plugin aggregation (pom)
+    ├── pom.xml            # parent -> ../jnimble-framework, dependencyManagement for inter-plugin versions
+    └── jnimble-plugin-*/  # 8 business plugins
 ```
 
-## 环境要求
+The framework is referenced as a submodule so the plugins can compile against local framework source — convenient for two-sided debugging. Upstream framework source is **not modified** in this repo's history; two local working-tree patches (see [Development Mode](#development-mode-clone--run)) enable "clone and run" without touching upstream.
+
+## Requirements
 
 - JDK 21+
 - Maven 3.9+
-- MySQL 8+(或任意 Spring Boot 支持的 DataSource)
+- MySQL 8+ (or any Spring Boot-supported DataSource)
 
-## 快速开始
+## Quick Start
 
-### 1. 克隆(带 submodule)
+### 1. Clone (with submodule)
 
 ```bash
-git clone --recurse-submodules <本仓库地址>
+git clone --recurse-submodules https://github.com/what123/jnimble-order-plugin.git
 cd jnimble-order-plugin
 ```
 
-如果已经 clone 但忘了带 `--recurse-submodules`:
+If you forgot `--recurse-submodules`:
 
 ```bash
 git submodule update --init --recursive
 ```
 
-### 2. 构建 & 本地启动(开发模式,推荐)
+### 2. Build & Run (Development Mode, recommended)
 
-开发模式下,starter 会把 `plugins/` 下所有业务插件作为 classpath 依赖直接引入,**无需打 JAR、无需拷贝到 `data/plugins/`**,改完代码直接 `spring-boot:run` 即可看到效果。
+In dev mode, the starter pulls every plugin under `plugins/` onto its classpath. **No JAR packaging, no copying to `data/plugins/`** — just `spring-boot:run` after editing code.
 
-> ⚠️ 关键步骤:framework submodule 的两处本地改动(starter pom 加业务插件依赖、application.yml 开 `dev-classpath-enabled`)不会进入 framework 上游仓库,clone 后需要执行一次补丁脚本应用这两处改动:
+> ⚠️ **One-time patch step**: two local working-tree changes (starter pom deps + `dev-classpath-enabled=true`) are required in the framework submodule to enable clone-and-run. They are intentionally **not pushed** to `what123/JNimble` upstream, so apply them locally after clone:
 >
 > ```bash
 > bash scripts/apply-dev-classpath.sh
 > ```
 >
-> 脚本幂等,已应用会直接返回。重新 `git submodule update` 升级 framework 后需再跑一次。
+> Idempotent — re-running on an already-patched tree is a no-op. Re-run once after each `git submodule update`. See [`doc/dev-classpath-setup.md`](doc/dev-classpath-setup.md) for details.
 
-首次启动前,先安装 framework 到本地 Maven 仓库(因为 starter 依赖 framework 各模块):
+Install the framework to local Maven (starter depends on its modules):
 
 ```bash
 cd jnimble-framework
@@ -59,13 +79,13 @@ mvn clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
 cd ..
 ```
 
-再安装业务插件到本地仓库(开发期 classpath 发现依赖本地仓库的 JAR):
+Install business plugins to local Maven (dev classpath discovery reads from `~/.m2`):
 
 ```bash
 mvn -f plugins/pom.xml clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
 ```
 
-设置环境变量并启动 starter:
+Set env vars and start the starter:
 
 ```bash
 export JNIMBLE_DB_URL='jdbc:mysql://localhost:3306/jnimble?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&createDatabaseIfNotExist=true'
@@ -77,72 +97,83 @@ cd jnimble-framework
 mvn -pl jnimble-starter spring-boot:run
 ```
 
-启动后访问 http://localhost:8080/admin,使用 `admin` / `JNIMBLE_DEFAULT_ADMIN_PASSWORD` 登录,业务插件会自动出现在侧边栏。
+Visit http://localhost:8080/admin, sign in as `admin` / the `JNIMBLE_DEFAULT_ADMIN_PASSWORD` you set. Business plugins appear in the sidebar automatically.
 
-> ⚠️ 本地改动:以上"clone 即可开发"能力依赖于对 `jnimble-framework/jnimble-starter` 的两处本地改动:
-> - `jnimble-starter/pom.xml` 添加了对 `plugins/` 下各业务模块的 `<dependency>`(classpath 引入)
-> - `jnimble-starter/src/main/resources/application.yml` 把 `jnimble.plugins.dev-classpath-enabled` 默认值改为 `true`
+> ⚠️ The clone-and-run capability depends on two local changes in `jnimble-framework/jnimble-starter`:
+> - `jnimble-starter/pom.xml` adds `<dependency>` entries for every business plugin module (classpath inclusion)
+> - `jnimble-starter/src/main/resources/application.yml` changes `jnimble.plugins.dev-classpath-enabled` default from `false` to `true`
 >
-> 这两处改动**不会 push 到 `what123/JNimble` 上游仓库**,clone 本仓库后通过 `bash scripts/apply-dev-classpath.sh` 应用(脚本幂等)。开源用户跑一次脚本即可拥有此能力;若要把 framework 升级到新版本,重新 `git submodule update` 后需重新跑一次脚本(见 `doc/dev-classpath-setup.md`)。
+> These changes **are not pushed to `what123/JNimble` upstream**. After cloning this repo, apply them via `bash scripts/apply-dev-classpath.sh` (idempotent). Re-run the script after each `git submodule update`. See [`doc/dev-classpath-setup.md`](doc/dev-classpath-setup.md).
 
-### 3. 生产部署(打包成 JAR)
+### 3. Production Deployment (JAR-based)
 
-生产环境关闭 classpath 发现,改用插件目录热部署:
+For production, disable classpath discovery and use the plugin directory hot-deploy:
 
 ```bash
 mvn -f plugins/pom.xml package -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
 
-# 把各插件 target/*.jar 拷到生产 starter 的 data/plugins/
-cp plugins/jnimble-plugin-*/target/jnimble-plugin-*.jar <生产 starter 目录>/data/plugins/
+# Copy each plugin JAR to the production starter's data/plugins/
+cp plugins/jnimble-plugin-*/target/jnimble-plugin-*.jar <production-starter-dir>/data/plugins/
 ```
 
-生产启动时设置环境变量 `JNIMBLE_DEV_CLASSPATH_ENABLED=false`(或不设,看你是否保留 application.yml 的默认值)。
+Set `JNIMBLE_DEV_CLASSPATH_ENABLED=false` (or leave the application.yml default) when starting in production.
 
-## 关键配置开关:`jnimble.plugins.dev-classpath-enabled`
+## Configuration Switch: `jnimble.plugins.dev-classpath-enabled`
 
-控制 starter 是否从 classpath 自动发现并安装插件。两个取值:
+Controls whether the starter auto-discovers and installs plugins from its classpath.
 
-| 值 | 行为 | 适用场景 |
-|----|------|---------|
-| `true`(本仓库默认) | starter 启动时扫描 classpath 上所有 `META-INF/jnimble-plugin.json`,直接以 classpath 形式安装并 `boot()`。改代码后重启即生效,不需要打 JAR | 开发期 |
-| `false`(framework 上游默认) | 关闭 classpath 发现,只从 `data/plugins/` 目录加载 JAR | 生产部署 |
+| Value | Behavior | Use Case |
+|-------|----------|----------|
+| `true` (this repo's default) | Starter scans `META-INF/jnimble-plugin.json` on classpath, installs and `boot()`s each plugin directly. Code edits take effect on restart, no JAR build needed. | Development |
+| `false` (upstream default) | Classpath discovery off; plugins only load from `data/plugins/` directory. | Production |
 
-设置方式:
+How to set:
 
-- 环境变量:`JNIMBLE_DEV_CLASSPATH_ENABLED=true|false`(优先级最高)
-- `application.yml`:`jnimble.plugins.dev-classpath-enabled: true|false`
+- Env var: `JNIMBLE_DEV_CLASSPATH_ENABLED=true|false` (highest priority)
+- `application.yml`: `jnimble.plugins.dev-classpath-enabled: true|false`
 
-**配套条件**:开 `dev-classpath-enabled=true` 时,starter 的 pom 必须把业务插件作为 `<dependency>` 引入,否则 classpath 上没有插件类,发现不到。本仓库的 `jnimble-framework/jnimble-starter/pom.xml` 已做好这一步。
+**Prerequisite**: when `dev-classpath-enabled=true`, the starter's pom must declare each business plugin as a `<dependency>` so its classes are on the classpath. `jnimble-framework/jnimble-starter/pom.xml` already does this (applied via the patch script).
 
-## 目录结构
+## Plugin Layout Convention
 
 ```
 jnimble-order-plugin/
-├── jnimble-framework/                    # 主框架 submodule
-│   └── jnimble-starter/                  # 开发期启动入口
-│       ├── pom.xml                       # 本地改动:依赖 plugins 各模块
-│       └── src/main/resources/application.yml  # 本地改动:dev-classpath-enabled=true
+├── jnimble-framework/                    # upstream framework submodule
+│   └── jnimble-starter/                  # dev-time launch entry
+│       ├── pom.xml                       # LOCAL CHANGE: depends on plugins/*
+│       └── src/main/resources/application.yml  # LOCAL CHANGE: dev-classpath-enabled=true
 └── plugins/
-    ├── pom.xml                           # 业务插件聚合,dependencyManagement 统一内部版本
-    └── jnimble-plugin-*/                 # 各业务插件
+    ├── pom.xml                           # aggregation + dependencyManagement for inter-plugin versions
+    └── jnimble-plugin-*/                # each business plugin
         ├── pom.xml
         └── src/main/
-            ├── java/.../XxxPluginBoot.java            # 实现 PluginBoot
+            ├── java/.../XxxPluginBoot.java            # implements PluginBoot
             └── resources/
-                ├── META-INF/jnimble-plugin.json       # 插件描述符(必需)
-                ├── templates/plugin/{pluginId}/        # 模板路径必须 plugin/{pluginId}/ 开头
-                ├── i18n/                                # 国际化
-                └── db/migration/plugin/{pluginId}/    # 插件级 Flyway 迁移
+                ├── META-INF/jnimble-plugin.json       # descriptor (required)
+                ├── templates/plugin/{pluginId}/       # template paths MUST start with plugin/{pluginId}/
+                ├── i18n/                               # internationalization
+                └── db/migration/plugin/{pluginId}/    # plugin-scoped Flyway migrations
 ```
 
-## 开发约定
+## Development Conventions
 
-- 插件模板路径必须以 `plugin/{pluginId}/` 开头
-- 权限码必须以 `{pluginId}.` 开头,否则不会同步到角色管理
-- 数据库变更只加新 `V{n}__*.sql`,不改旧脚本(Flyway checksum)
-- 业务插件之间互引版本统一在 `plugins/pom.xml` 的 `<dependencyManagement>` 声明
-- 详细规范参考 [主框架 CLAUDE.md](https://github.com/what123/JNimble/blob/main/CLAUDE.md)
+- Plugin template paths MUST start with `plugin/{pluginId}/`
+- Permission codes MUST start with `{pluginId}.` — otherwise they won't sync to role management
+- For DB changes, only add new `V{n}__*.sql` scripts; never edit existing ones (Flyway checksum)
+- Inter-plugin version references are centralized in `plugins/pom.xml` `<dependencyManagement>`
+- See the upstream [CLAUDE.md](https://github.com/what123/JNimble/blob/main/CLAUDE.md) for full conventions
 
-## 授权
+## Upstream
 
-Apache 2.0 + 商业授权双重模式。保留版权可商用,去版权需联系 `178277164@qq.com`。详见 [NOTICE](NOTICE)。
+- Framework source: [what123/JNimble](https://github.com/what123/JNimble)
+- This repository tracks a specific commit of `what123/JNimble` via the `jnimble-framework/` submodule.
+  Run `git submodule status` to see the pinned commit.
+- Upstream framework is intentionally left unmodified in this repo's commit history; the two
+  working-tree patches enabling dev-classpath mode are applied locally via
+  [`scripts/apply-dev-classpath.sh`](scripts/apply-dev-classpath.sh) and never pushed upstream.
+
+## License
+
+Apache 2.0 + Commercial dual-license. Open-source use must retain the copyright footer
+in the admin UI and login page. Copyright removal requires a commercial license from
+`178277164@qq.com`. See [NOTICE](NOTICE) and [LICENSE](LICENSE) for full terms.
