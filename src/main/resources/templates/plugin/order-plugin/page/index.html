@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN" th:lang="${#locale.toLanguageTag()}"
+      xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout/admin}">
+<body>
+  <main class="admin-shell__content" layout:fragment="content">
+    <h1 th:text="#{order-plugin.name}">点餐</h1>
+    <p>点餐插件首页。</p>
+  </main>
+</body>
+</html>

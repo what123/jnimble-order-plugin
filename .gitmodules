@@ -1,0 +1,3 @@
+[submodule "jnimble-framework"]
+	path = jnimble-framework
+	url = git@github.com:what123/JNimble.git

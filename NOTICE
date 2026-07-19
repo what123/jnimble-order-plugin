@@ -1,0 +1,35 @@
+jnimble-order-plugin
+====================
+
+Copyright © 2026 JNimble. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+------------------------------------------------------------------------------
+
+Commercial Licensing
+--------------------
+
+This plugin uses the same dual-licensing model as the JNimble framework:
+
+1. **Open Source License (Apache 2.0)** — you may use, modify, and distribute
+   this plugin commercially, provided that the copyright footer in the JNimble
+   admin UI and login page is retained:
+
+       © 2026 JNimble.
+
+2. **Commercial License** — to remove or alter the copyright footer, purchase
+   a commercial license from 178277164@qq.com.
+
+See [NOTICE](https://github.com/what123/JNimble/blob/main/NOTICE) on the
+framework repository for full terms.
