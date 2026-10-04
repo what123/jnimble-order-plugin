@@ -124,6 +124,12 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="Force" width="80" align="center" th:attr="label=#{menu.item.force_selected}">
+          <template slot-scope="scope">
+            <el-tag v-if="scope.row.forceSelected" type="warning" size="small">ON</el-tag>
+            <span v-else style="color:#c0c4cc">-</span>
+          </template>
+        </el-table-column>
         <el-table-column label="Actions" width="220" align="center" th:attr="label=#{common.actions}">
           <template slot-scope="scope">
             <el-button size="mini" @click="openDialog(scope.row)">{{ i18n.edit }}</el-button>
@@ -276,6 +282,10 @@
               <el-radio label="DISABLED">{{ i18n.disabled }}</el-radio>
             </el-radio-group>
           </el-form-item>
+          <el-form-item label="Force Selected" th:attr="label=#{menu.item.force_selected}">
+            <el-switch v-model="form.forceSelected" :active-value="true" :inactive-value="false"></el-switch>
+            <span style="color:#909399;font-size:12px;margin-left:8px" th:text="#{menu.item.force_selected_tip}">Auto-add to cart when ordering</span>
+          </el-form-item>
         </el-form>
         <span slot="footer">
           <el-button :disabled="saving || uploading" @click="closeDialog" th:text="#{common.cancel}">Cancel</el-button>
@@ -350,6 +360,7 @@
             description: '',
             sortOrder: 0,
             status: 'ENABLED',
+            forceSelected: false,
             images: [],
             groups: []
           },
@@ -506,6 +517,7 @@
                 description: row.description || '',
                 sortOrder: row.sortOrder,
                 status: row.status,
+                forceSelected: !!row.forceSelected,
                 images: this.normalizeImages(row),
                 groups: row.groups && row.groups.length > 0
                   ? JSON.parse(JSON.stringify(row.groups))
@@ -515,7 +527,7 @@
               this.editingId = null;
               this.form = {
                 name: '', categoryId: null, price: 0, unit: '',
-                description: '', sortOrder: 0, status: 'ENABLED', images: [], groups: []
+                description: '', sortOrder: 0, status: 'ENABLED', forceSelected: false, images: [], groups: []
               };
             }
             this.nextImageOrder = this.form.images.length;
@@ -541,6 +553,7 @@
                 description: self.form.description,
                 sortOrder: self.form.sortOrder,
                 status: self.form.status,
+                forceSelected: self.form.forceSelected,
                 imagePath: self.form.images.length > 0 ? self.form.images[0].imagePath : null,
                 images: self.form.images.map(function (image, index) {
                   return { imagePath: image.imagePath, sortOrder: index };

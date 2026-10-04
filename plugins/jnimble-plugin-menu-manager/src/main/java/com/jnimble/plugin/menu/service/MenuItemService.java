@@ -55,6 +55,14 @@ public class MenuItemService {
         return items;
     }
 
+    public List<MenuItemEntity> getForceSelectedItems(Long storeId) {
+        return MapperUtils.selectList(menuItemMapper, MenuItemEntity.class, wrapper -> {
+            wrapper.eq("force_selected", true);
+            wrapper.eq("status", "ENABLED");
+            wrapper.orderByAsc("sort_order");
+        });
+    }
+
     public MenuItemEntity getItem(Long id) {
         MenuItemEntity item = MapperUtils.getById(menuItemMapper, id, "Menu item not found");
         attachGroups(List.of(item));

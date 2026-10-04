@@ -21,6 +21,7 @@ public class MenuItemEntity {
     private String description;
     private String status;
     private Integer sortOrder;
+    private Boolean forceSelected;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -100,6 +101,14 @@ public class MenuItemEntity {
 
     public void setSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
+    }
+
+    public Boolean getForceSelected() {
+        return forceSelected;
+    }
+
+    public void setForceSelected(Boolean forceSelected) {
+        this.forceSelected = forceSelected;
     }
 
     public Instant getCreatedAt() {
