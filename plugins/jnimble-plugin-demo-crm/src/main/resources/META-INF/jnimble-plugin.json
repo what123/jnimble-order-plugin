@@ -9,12 +9,6 @@
   "platformVersion": "0.1.x",
   "author": "JNimble Team",
   "bootClass": "com.jnimble.plugin.crm.CrmPluginBoot",
-  "license": {
-    "required": true,
-    "issuer": "jnimble",
-    "productCode": "crm",
-    "policy": "STRICT"
-  },
   "i18n": {
     "basename": "i18n/messages"
   },
