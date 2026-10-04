@@ -1,0 +1,172 @@
+diff --git a/docs/blueprints/ordering-system.md b/docs/blueprints/ordering-system.md
+new file mode 100644
+index 0000000..7e17278
+--- /dev/null
++++ b/docs/blueprints/ordering-system.md
+@@ -0,0 +1,118 @@
++# 点餐系统组装指南
++
++本指南说明如何用 **JNimble 框架** + 一组**业务插件**组装出一套可运行的点餐系统。
++
++> 组装方式:框架从源码构建或下载发布包;**插件从插件仓库的 Releases 下载预构建 JAR**,放进框架的
++> `data/plugins/` 目录即可,无需自行编译插件。
++
++## 1. 系统组成
++
++| 层 | 组件 | 来源 |
++|---|---|---|
++| 框架 | JNimble(`jnimble-starter` 等) | https://github.com/what123/JNimble |
++| 插件 | 菜单 / 点餐 / 桌台 / 支付 / 打印 / 扫码 / CRM 等 | https://github.com/what123/jnimble-order-plugin |
++
++## 2. 环境要求
++
++- JDK 21+
++- Maven 3.9+（若直接下载框架发布包运行,可不需要）
++- MySQL 8+（或任意 Spring Boot 支持的 DataSource）
++
++## 3. 获取并构建框架
++
++```bash
++git clone https://github.com/what123/JNimble.git
++cd JNimble
++mvn clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
++```
++
++> 若提供了框架发布包(可执行 jar/starter),可跳过构建,直接运行发布包。
++
++## 4. 获取插件
++
++到插件仓库的 **Releases** 页面下载:
++
++- 仓库:https://github.com/what123/jnimble-order-plugin/releases
++- 推荐下载**整套包** `ordering-system-<版本>.zip`(内含该套全部插件 JAR);
++  也可按需单独下载某个插件的 JAR。
++
++单个插件 JAR 命名:`jnimble-plugin-<id>-<版本>.jar`,例如 `jnimble-plugin-order-core-1.0.0.jar`。
++
++> 版本号即插件仓库的 git tag(如 `v1.0.0`);整套包下载地址形如:
++> `https://github.com/what123/jnimble-order-plugin/releases/download/v1.0.0/ordering-system-v1.0.0.zip`
++> 具体可用版本以 Releases 页面为准。
++
++### 本套点餐系统需要的插件
++
++| 插件 id | 说明 | 依赖的插件 |
++|---|---|---|
++| `menu-manager` | 菜单 / 菜品 / 规格管理 | — |
++| `order-core` | 点餐核心(订单、后厨排队) | menu-manager |
++| `order-table` | 桌台点餐(桌位图、座位路由) | order-core, menu-manager |
++| `payment` | 支付聚合与对账 | order-core |
++| `printer-core` | 打印抽象与模板 | order-core |
++| `printer-feie` | 飞鹅云打印机驱动 | printer-core |
++| `scan-consumer` | 扫码下单 | order-core, order-table, menu-manager |
++
++> 若只想体验,可先装最小集:`menu-manager` + `order-core`;要完整点餐流程再补齐其余插件。
++
++## 5. 组装
++
++1. 确认框架的插件目录:`jnimble-starter/data/plugins/`（`spring-boot:run` 的工作目录是 `jnimble-starter/`）。
++2. 把 **第 4 步下载的全部插件 JAR** 拷贝进去:
++
++```bash
++mkdir -p jnimble-starter/data/plugins
++cp /path/to/downloaded/jnimble-plugin-*.jar jnimble-starter/data/plugins/
++```
++
++3. 启动时框架会扫描该目录,**按插件依赖顺序自动安装并启用**,运行期还会监听目录做热部署。
++
++## 6. 启动与登录
++
++```bash
++export JNIMBLE_DB_URL='jdbc:mysql://localhost:3306/jnimble_ordering?useUnicode=true&characterEncoding=UTF-8&serverTimezone=UTC&createDatabaseIfNotExist=true'
++export JNIMBLE_DB_USERNAME=root
++export JNIMBLE_DB_PASSWORD='<your-mysql-password>'
++export JNIMBLE_DEFAULT_ADMIN_PASSWORD='<admin-password>'
++
++cd jnimble-framework
++mvn -pl jnimble-starter spring-boot:run
++```
++
++浏览器访问 `http://localhost:8080/admin`,用 `admin` / `JNIMBLE_DEFAULT_ADMIN_PASSWORD` 登录。
++业务插件的菜单会出现在侧边栏。
++
++## 7. 插件依赖关系(务必成套安装)
++
++```
++menu-manager
++  └── order-core
++        ├── order-table ──┐
++        ├── payment        │
++        ├── printer-core   │
++        │     └── printer-feie
++        └── scan-consumer ─┘（还依赖 order-table, menu-manager）
++```
++
++- 插件 JAR **不内联**依赖的插件;只装上层插件(如 `order-table`)而不装其依赖(`order-core`、`menu-manager`),启动时会因缺类而启用失败。
++- 因此**建议下载整套包**;若单独下载,请连同其依赖一起安装。
++
++## 8. 版本兼容
++
++- 每个插件 Release 会标注其兼容的框架版本(`platformVersion`,如 `0.1.x`)。
++- 请确保插件与框架版本匹配;不匹配时框架会拒绝启用该插件并给出提示。
++
++## 9. 常见问题
++
++| 现象 | 原因 / 处理 |
++|---|---|
++| 侧边栏没有插件菜单 | 插件未安装/未启用;检查 `data/plugins/` 是否有 JAR,或查看后台「插件管理」 |
++| 某插件启用失败 | 多半缺少其依赖插件;按第 7 节成套安装 |
++| 启动报 Flyway 校验失败 | 框架版本与数据库迁移不匹配;用与库对应的框架版本 |
++| `NoClassDefFoundError`(插件) | 缺依赖插件或框架模块;补齐 JAR 后重启 |
++
++## 10. 更新与升级
++
++- **升级插件**:下载新版本 JAR 覆盖 `data/plugins/` 中同名文件,运行中的应用会**热部署**;未运行则下次启动加载。
++- **升级框架**:替换框架版本并重启;注意插件的 `platformVersion` 兼容范围。
+diff --git a/jnimble-platform/src/main/java/com/jnimble/platform/auth/JNimbleSecurityConfiguration.java b/jnimble-platform/src/main/java/com/jnimble/platform/auth/JNimbleSecurityConfiguration.java
+index 77ee180..464e60d 100644
+--- a/jnimble-platform/src/main/java/com/jnimble/platform/auth/JNimbleSecurityConfiguration.java
++++ b/jnimble-platform/src/main/java/com/jnimble/platform/auth/JNimbleSecurityConfiguration.java
+@@ -10,6 +10,11 @@ import org.springframework.security.core.userdetails.UserDetailsService;
+ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+ import org.springframework.security.crypto.password.PasswordEncoder;
+ import org.springframework.security.web.SecurityFilterChain;
++import org.springframework.web.cors.CorsConfiguration;
++import org.springframework.web.cors.CorsConfigurationSource;
++import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
++
++import java.util.List;
+ 
+ /**
+  * Spring Security configuration for the JNimble platform.
+@@ -38,8 +43,11 @@ public class JNimbleSecurityConfiguration {
+     @Bean
+     SecurityFilterChain jnimbleSecurityFilterChain(HttpSecurity http) throws Exception {
+         return http
++                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
++                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**", "/plugins/**"))
+                 .authorizeHttpRequests(authorize -> authorize
+-                        .requestMatchers("/login", "/error", "/actuator/health", "/assets/system/**").permitAll()
++                        .requestMatchers("/login", "/error", "/actuator/health", "/assets/system/**",
++                                "/admin/system-settings/logo/**").permitAll()
+                         .requestMatchers("/admin", "/admin/**").authenticated()
+                         .anyRequest().permitAll())
+                 .formLogin(form -> form
+@@ -53,6 +61,18 @@ public class JNimbleSecurityConfiguration {
+                 .build();
+     }
+ 
++    @Bean
++    CorsConfigurationSource corsConfigurationSource() {
++        CorsConfiguration configuration = new CorsConfiguration();
++        configuration.setAllowedOriginPatterns(List.of("*"));
++        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
++        configuration.setAllowedHeaders(List.of("*"));
++        configuration.setAllowCredentials(true);
++        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
++        source.registerCorsConfiguration("/**", configuration);
++        return source;
++    }
++
+     /**
+      * Creates the user account service bean.
+      *
