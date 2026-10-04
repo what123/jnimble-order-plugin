@@ -7,6 +7,7 @@ import com.jnimble.plugin.printer.model.dto.PublishedPrintTemplate;
 import com.jnimble.plugin.printer.model.entity.PrintJobEntity;
 import com.jnimble.plugin.printer.model.entity.PrintNodeEntity;
 import com.jnimble.plugin.printer.model.entity.PrinterEntity;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -90,5 +91,54 @@ public class PrintJobService {
         entity.setErrorMessage(null);
         MapperUtils.updateById(printJobMapper, entity);
         return entity;
+    }
+
+    /**
+     * 拉取待调度任务,按创建时间升序,只取前 {@code limit} 条。
+     */
+    public List<PrintJobEntity> listPendingJobs(int limit) {
+        return MapperUtils.selectList(printJobMapper, PrintJobEntity.class, wrapper -> {
+            wrapper.eq("status", "PENDING")
+                    .orderByAsc("created_at")
+                    .last("LIMIT " + Math.max(1, limit));
+        });
+    }
+
+    /**
+     * 标记任务执行成功。
+     */
+    public void markSuccess(String jobId, String externalOrderId) {
+        PrintJobEntity entity = MapperUtils.getById(printJobMapper, jobId, "Print job not found: " + jobId);
+        entity.setStatus("SUCCESS");
+        entity.setPrintedAt(Instant.now());
+        if (externalOrderId != null && !externalOrderId.isBlank()) {
+            entity.setExternalOrderId(externalOrderId);
+        }
+        entity.setErrorMessage(null);
+        MapperUtils.updateById(printJobMapper, entity);
+    }
+
+    /**
+     * 标记任务执行失败,根据 retryCount/maxRetries 决定是否仍可重试。
+     */
+    public void markFailed(String jobId, String errorMessage) {
+        PrintJobEntity entity = MapperUtils.getById(printJobMapper, jobId, "Print job not found: " + jobId);
+        int retryCount = (entity.getRetryCount() == null ? 0 : entity.getRetryCount()) + 1;
+        int maxRetries = entity.getMaxRetries() == null ? 3 : entity.getMaxRetries();
+        entity.setRetryCount(retryCount);
+        entity.setErrorMessage(truncate(errorMessage, 3800));
+        if (retryCount >= maxRetries) {
+            entity.setStatus("FAILED");
+        } else {
+            entity.setStatus("PENDING");
+        }
+        MapperUtils.updateById(printJobMapper, entity);
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 }

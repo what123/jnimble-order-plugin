@@ -20,6 +20,7 @@
 <main layout:fragment="content">
   <div id="app-printers" class="app-printers" v-cloak>
     <div class="filter-bar">
+      <el-button type="success" @click="openBatchDialog" th:text="#{printer-core.printers.batchAdd}">Batch Add (Feie)</el-button>
       <el-button type="primary" style="margin-left:auto" @click="openDialog(null)" th:text="#{printer-core.printers.add}">Add Printer</el-button>
     </div>
 
@@ -40,13 +41,28 @@
       <el-table-column label="Last Heartbeat" width="160" th:attr="label=#{printer-core.printers.lastHeartbeat}">
         <template slot-scope="scope">{{ scope.row.lastHeartbeatAt || '-' }}</template>
       </el-table-column>
-      <el-table-column label="Actions" width="150" align="center" th:attr="label=#{printer-core.common.actions}">
+      <el-table-column label="Actions" width="240" align="center" th:attr="label=#{printer-core.common.actions}">
         <template slot-scope="scope">
           <el-button size="mini" type="primary" plain @click="openDialog(scope.row)">{{ i18n.edit }}</el-button>
+          <el-button size="mini" type="warning" plain @click="handleClearQueue(scope.row)" v-if="scope.row.driverId==='feie'">{{ i18n.clearQueue }}</el-button>
           <el-button size="mini" type="danger" plain @click="handleDelete(scope.row)">{{ i18n.delete }}</el-button>
         </template>
       </el-table-column>
     </el-table>
+
+    <el-dialog :title="i18n.batchAddTitle" :visible.sync="batchDialogVisible" width="600px">
+      <el-form label-width="0" size="small">
+        <el-form-item>
+          <el-input type="textarea" v-model="batchForm.printers" :rows="8"
+            :placeholder="i18n.batchAddPlaceholder"></el-input>
+        </el-form-item>
+        <el-alert :title="i18n.batchAddHint" type="info" :closable="false"></el-alert>
+      </el-form>
+      <span slot="footer">
+        <el-button @click="batchDialogVisible = false">{{ i18n.cancel }}</el-button>
+        <el-button type="primary" @click="handleBatchAdd" :loading="batchSaving">{{ i18n.batchAddSubmit }}</el-button>
+      </span>
+    </el-dialog>
 
     <el-dialog :title="editingId ? i18n.editTitle : i18n.addTitle" :visible.sync="dialogVisible" width="500px">
       <el-form ref="formRef" :model="form" label-width="100px" size="small">
@@ -103,14 +119,26 @@
           added: /*[[#{printer-core.printers.added}]]*/ 'Printer added', operationFailed: /*[[#{printer-core.common.operationFailed}]]*/ 'Operation failed',
           deleteConfirm: /*[[#{printer-core.printers.deleteConfirm}]]*/ 'Delete printer "{0}"?', confirmTitle: /*[[#{printer-core.common.confirmTitle}]]*/ 'Confirmation',
           confirm: /*[[#{printer-core.common.confirm}]]*/ 'Confirm', deleted: /*[[#{printer-core.printers.deleted}]]*/ 'Printer deleted',
-          deleteFailed: /*[[#{printer-core.printers.deleteFailed}]]*/ 'Failed to delete printer', feieDriver: /*[[#{printer-core.driver.feie}]]*/ 'Feie Cloud Printer'
+          deleteFailed: /*[[#{printer-core.printers.deleteFailed}]]*/ 'Failed to delete printer', feieDriver: /*[[#{printer-core.driver.feie}]]*/ 'Feie Cloud Printer',
+          clearQueue: /*[[#{printer-core.printers.clearQueue}]]*/ 'Clear Queue',
+          clearQueueConfirm: /*[[#{printer-core.printers.clearQueueConfirm}]]*/ 'Clear pending queue on cloud for "{0}"?',
+          clearQueueSuccess: /*[[#{printer-core.printers.clearQueueSuccess}]]*/ 'Pending queue cleared',
+          clearQueueFailed: /*[[#{printer-core.printers.clearQueueFailed}]]*/ 'Failed to clear queue',
+          batchAddTitle: /*[[#{printer-core.printers.batchAddTitle}]]*/ 'Batch Add Feie Printers',
+          batchAddPlaceholder: /*[[#{printer-core.printers.batchAddPlaceholder}]]*/ 'sn1#key1#remark1#carnum1\nsn2#key2#remark2#',
+          batchAddHint: /*[[#{printer-core.printers.batchAddHint}]]*/ 'Format: sn#key#remark#carnum, one printer per line. Up to 100 printers per batch.',
+          batchAddSubmit: /*[[#{printer-core.printers.batchAddSubmit}]]*/ 'Submit',
+          batchAddSuccess: /*[[#{printer-core.printers.batchAddSuccess}]]*/ 'Batch add completed'
         },
         printers: [],
         drivers: [],
         dialogVisible: false,
         editingId: null,
         saving: false,
-        form: { name: '', driverId: '', type: 'RECEIPT', enabled: true, sortOrder: 0 }
+        form: { name: '', driverId: '', type: 'RECEIPT', enabled: true, sortOrder: 0 },
+        batchDialogVisible: false,
+        batchSaving: false,
+        batchForm: { printers: '' }
       },
       mounted: function () { this.fetchDrivers(); this.fetchPrinters(); },
       methods: {
@@ -166,6 +194,47 @@
               if (r.data.success) { self.$message.success(self.i18n.deleted); self.fetchPrinters(); }
             }).catch(function () { self.$message.error(self.i18n.deleteFailed); });
           }).catch(function () {});
+        },
+        handleClearQueue: function (row) {
+          var self = this;
+          this.$confirm(this.i18n.clearQueueConfirm.replace('{0}', row.name), this.i18n.confirmTitle, {
+            confirmButtonText: this.i18n.confirm, cancelButtonText: this.i18n.cancel, type: 'warning'
+          }).then(function () {
+            axios.post('/printers/' + row.id + '/clear-queue').then(function (r) {
+              if (r.data.success) {
+                self.$message.success(self.i18n.clearQueueSuccess);
+              } else {
+                self.$message.warning(r.data.message || self.i18n.clearQueueFailed);
+              }
+            }).catch(function () { self.$message.error(self.i18n.clearQueueFailed); });
+          }).catch(function () {});
+        },
+        openBatchDialog: function () {
+          this.batchForm.printers = '';
+          this.batchDialogVisible = true;
+        },
+        handleBatchAdd: function () {
+          var self = this;
+          if (!this.batchForm.printers || !this.batchForm.printers.trim()) {
+            this.$message.warning(this.i18n.batchAddPlaceholder);
+            return;
+          }
+          this.batchSaving = true;
+          axios.post('/admin/plugins/printer-feie/printers/batch-add', { printers: this.batchForm.printers })
+            .then(function (r) {
+              var data = r.data || {};
+              if (data.ret === 0) {
+                var okCount = (data.ok || []).length;
+                var noCount = (data.no || []).length;
+                self.$message.success(self.i18n.batchAddSuccess + ' (ok=' + okCount + ', no=' + noCount + ')');
+                self.batchDialogVisible = false;
+                self.fetchPrinters();
+              } else {
+                self.$message.error(data.msg || self.i18n.operationFailed);
+              }
+            })
+            .catch(function () { self.$message.error(self.i18n.operationFailed); })
+            .finally(function () { self.batchSaving = false; });
         }
       }
     });

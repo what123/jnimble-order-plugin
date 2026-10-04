@@ -17,11 +17,17 @@ import com.jnimble.plugin.printer.service.PrintTemplateRenderService;
 import com.jnimble.plugin.printer.service.PrintTemplateService;
 import com.jnimble.plugin.printer.service.PrintTemplateValidationException;
 import com.jnimble.plugin.printer.service.PrinterService;
+import com.jnimble.plugin.printer.spi.PrinterOperationResult;
+import com.jnimble.plugin.printer.spi.PrinterOrderStatistics;
+import com.jnimble.plugin.printer.spi.PrinterConfig;
+import com.jnimble.plugin.printer.spi.PrinterDriver;
 import com.jnimble.plugin.printer.spi.PrinterDriverRegistry;
 import com.jnimble.plugin.printer.template.PrintBlockDescriptor;
 import com.jnimble.plugin.printer.template.PrintTemplateExtensionRegistry;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.MediaType;
@@ -55,6 +61,7 @@ public class PrinterAdminController {
     private final PrintTemplateExtensionRegistry printTemplateExtensionRegistry;
     private final PrinterDriverRegistry driverRegistry;
     private final ControllerAuthorization authorization;
+    private final ObjectMapper objectMapper;
 
     public PrinterAdminController(PrinterService printerService,
                                   PrintNodeService printNodeService,
@@ -64,7 +71,8 @@ public class PrinterAdminController {
                                   PrintTemplateRenderService printTemplateRenderService,
                                   PrintTemplateExtensionRegistry printTemplateExtensionRegistry,
                                   PrinterDriverRegistry driverRegistry,
-                                  ControllerAuthorization authorization) {
+                                  ControllerAuthorization authorization,
+                                  ObjectMapper objectMapper) {
         this.printerService = printerService;
         this.printNodeService = printNodeService;
         this.printFlowService = printFlowService;
@@ -74,6 +82,7 @@ public class PrinterAdminController {
         this.printTemplateExtensionRegistry = printTemplateExtensionRegistry;
         this.driverRegistry = driverRegistry;
         this.authorization = authorization;
+        this.objectMapper = objectMapper;
     }
 
     @GetMapping("/printers")
@@ -129,6 +138,73 @@ public class PrinterAdminController {
     @ResponseBody
     public Collection<?> listDrivers() {
         return driverRegistry.allDrivers();
+    }
+
+    /**
+     * 清空指定打印机的远程待打印队列(云端未下发的任务)。
+     * 通过 driver SPI 转发到具体云平台。
+     */
+    @PostMapping("/printers/{id}/clear-queue")
+    @ResponseBody
+    public Map<String, Object> clearPrinterQueue(@PathVariable String id) {
+        authorization.requirePermission("printer-core.config");
+        PrinterEntity printer = printerService.getPrinter(id);
+        if (printer == null) {
+            throw new IllegalArgumentException("Printer not found: " + id);
+        }
+        PrinterDriver driver = driverRegistry.resolve(printer.getDriverId());
+        PrinterConfig config = buildConfig(printer);
+        PrinterOperationResult result = driver.clearPendingQueue(config);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("success", result.success());
+        response.put("driverId", result.driverId());
+        response.put("message", result.message());
+        return response;
+    }
+
+    /**
+     * 查询指定打印机某天的订单统计。
+     * 通过 driver SPI 转发到具体云平台。
+     */
+    @GetMapping("/printers/{id}/order-statistics")
+    @ResponseBody
+    public Map<String, Object> printerOrderStatistics(
+            @PathVariable String id,
+            @RequestParam String date
+    ) {
+        authorization.requirePermission("printer-core.view");
+        PrinterEntity printer = printerService.getPrinter(id);
+        if (printer == null) {
+            throw new IllegalArgumentException("Printer not found: " + id);
+        }
+        PrinterDriver driver = driverRegistry.resolve(printer.getDriverId());
+        PrinterConfig config = buildConfig(printer);
+        PrinterOrderStatistics statistics = driver.queryOrderStatistics(config, date);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("supported", statistics.supported());
+        response.put("printed", statistics.printed());
+        response.put("waiting", statistics.waiting());
+        response.put("message", statistics.message());
+        return response;
+    }
+
+    private PrinterConfig buildConfig(PrinterEntity printer) {
+        Map<String, String> properties = new HashMap<>();
+        String configJson = printer.getConfigJson();
+        if (configJson != null && !configJson.isBlank()) {
+            try {
+                var parsed = objectMapper.readTree(configJson);
+                parsed.fields().forEachRemaining(entry -> {
+                    var value = entry.getValue();
+                    if (value != null && !value.isNull()) {
+                        properties.put(entry.getKey(), value.asText());
+                    }
+                });
+            } catch (Exception ignored) {
+                // 解析失败留空
+            }
+        }
+        return new PrinterConfig(printer.getDriverId(), properties);
     }
 
     @GetMapping("/nodes")

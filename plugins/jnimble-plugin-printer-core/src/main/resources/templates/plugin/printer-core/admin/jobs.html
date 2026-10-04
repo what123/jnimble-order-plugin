@@ -30,6 +30,25 @@
       <el-button type="primary" style="margin-left:auto" @click="fetchJobs" th:text="#{printer-core.common.search}">Search</el-button>
     </div>
 
+    <el-collapse style="margin-top:8px">
+      <el-collapse-item :title="i18n.orderStats" name="stats">
+        <div class="filter-bar">
+          <el-select v-model="stats.printerId" placeholder="Select Printer" style="width:280px" th:attr="placeholder=#{printer-core.jobs.printer}">
+            <el-option v-for="p in printers" :key="p.id" :label="p.name + ' (' + p.driverId + ')'" :value="p.id"></el-option>
+          </el-select>
+          <el-date-picker v-model="stats.date" type="date" value-format="yyyy-MM-dd" :placeholder="i18n.orderStatsDate"></el-date-picker>
+          <el-button type="primary" @click="fetchStats" :loading="statsLoading">{{ i18n.orderStatsQuery }}</el-button>
+        </div>
+        <div v-if="statsResult" style="margin-top:12px">
+          <el-alert v-if="!statsResult.supported" :title="i18n.orderStatsUnsupported" type="warning" :closable="false"></el-alert>
+          <div v-else>
+            <el-tag type="success">{{ i18n.orderStatsPrinted }}: {{ statsResult.printed }}</el-tag>
+            <el-tag type="warning" style="margin-left:12px">{{ i18n.orderStatsWaiting }}: {{ statsResult.waiting }}</el-tag>
+          </div>
+        </div>
+      </el-collapse-item>
+    </el-collapse>
+
     <el-table :data="jobs" border stripe style="width:100%">
       <el-table-column prop="orderId" label="Order ID" width="160" th:attr="label=#{printer-core.jobs.order}"></el-table-column>
       <el-table-column prop="printerId" label="Printer" width="120" th:attr="label=#{printer-core.jobs.printer}"></el-table-column>
@@ -81,18 +100,45 @@
           failed: /*[[#{printer-core.job.status.FAILED}]]*/ 'Failed',
           cancelled: /*[[#{printer-core.job.status.CANCELLED}]]*/ 'Cancelled',
           resubmitted: /*[[#{printer-core.jobs.resubmitted}]]*/ 'Job resubmitted',
-          operationFailed: /*[[#{printer-core.common.operationFailed}]]*/ 'Operation failed'
+          operationFailed: /*[[#{printer-core.common.operationFailed}]]*/ 'Operation failed',
+          orderStats: /*[[#{printer-core.jobs.orderStats}]]*/ 'Order Statistics',
+          orderStatsDate: /*[[#{printer-core.jobs.orderStatsDate}]]*/ 'Date',
+          orderStatsQuery: /*[[#{printer-core.jobs.orderStatsQuery}]]*/ 'Query',
+          orderStatsPrinted: /*[[#{printer-core.jobs.orderStatsPrinted}]]*/ 'Printed',
+          orderStatsWaiting: /*[[#{printer-core.jobs.orderStatsWaiting}]]*/ 'Waiting',
+          orderStatsUnsupported: /*[[#{printer-core.jobs.orderStatsUnsupported}]]*/ 'Driver does not support order statistics'
         },
         jobs: [],
-        filter: { status: null }
+        printers: [],
+        filter: { status: null },
+        stats: { printerId: null, date: new Date().toISOString().substring(0, 10) },
+        statsResult: null,
+        statsLoading: false
       },
-      mounted: function () { this.fetchJobs(); },
+      mounted: function () { this.fetchJobs(); this.fetchPrinters(); },
       methods: {
         fetchJobs: function () {
           var self = this;
           var params = {};
           if (this.filter.status) params.status = this.filter.status;
           axios.get('/jobs/list', { params: params }).then(function (r) { self.jobs = r.data; });
+        },
+        fetchPrinters: function () {
+          var self = this;
+          axios.get('/printers/list').then(function (r) { self.printers = r.data; });
+        },
+        fetchStats: function () {
+          var self = this;
+          if (!this.stats.printerId || !this.stats.date) {
+            this.$message.warning(this.i18n.orderStatsDate);
+            return;
+          }
+          this.statsLoading = true;
+          this.statsResult = null;
+          axios.get('/printers/' + this.stats.printerId + '/order-statistics', { params: { date: this.stats.date } })
+            .then(function (r) { self.statsResult = r.data; })
+            .catch(function () { self.$message.error(self.i18n.operationFailed); })
+            .finally(function () { self.statsLoading = false; });
         },
         statusLabel: function (s) {
           var map = { PENDING: this.i18n.pending, PRINTING: this.i18n.printing, COMPLETED: this.i18n.completed, FAILED: this.i18n.failed, CANCELLED: this.i18n.cancelled };

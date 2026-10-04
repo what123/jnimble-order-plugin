@@ -28,6 +28,7 @@ public class PrintJobEntity {
     private Integer maxRetries;
     private String errorMessage;
     private String driverId;
+    private String externalOrderId;
     private LocalDateTime createdAt;
     private Instant printedAt;
 
@@ -181,6 +182,14 @@ public class PrintJobEntity {
 
     public void setDriverId(String driverId) {
         this.driverId = driverId;
+    }
+
+    public String getExternalOrderId() {
+        return externalOrderId;
+    }
+
+    public void setExternalOrderId(String externalOrderId) {
+        this.externalOrderId = externalOrderId;
     }
 
     public LocalDateTime getCreatedAt() {

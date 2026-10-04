@@ -70,7 +70,8 @@ class PrinterAdminControllerTest {
                 printTemplateRenderService,
                 printTemplateExtensionRegistry,
                 driverRegistry,
-                authorization
+                authorization,
+                new com.fasterxml.jackson.databind.ObjectMapper()
         );
     }
 
