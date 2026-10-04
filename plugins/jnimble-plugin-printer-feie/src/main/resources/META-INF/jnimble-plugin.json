@@ -9,11 +9,21 @@
   "platformVersion": "0.1.x",
   "author": "JNimble Team",
   "bootClass": "com.jnimble.plugin.printer.feie.FeiePluginBoot",
+  "spring": {
+    "configurationClass": "com.jnimble.plugin.printer.feie.FeiePrinterPluginConfiguration"
+  },
   "dependencies": [
     {
       "pluginId": "printer-core",
       "version": "1.x",
       "required": true
+    }
+  ],
+  "permissions": [
+    {
+      "code": "printer-feie.config",
+      "name": "Manage Feie printers",
+      "nameKey": "permission.printer-feie.config"
     }
   ],
   "i18n": {
