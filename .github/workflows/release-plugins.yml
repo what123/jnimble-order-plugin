@@ -1,0 +1,78 @@
+name: Release Plugins
+
+# 打 tag 时构建全部插件,并把各插件 JAR 与整套 zip 发布到该 tag 的 GitHub Release。
+# 用户即可从 Release 直接下载 JAR 放进框架的 data/plugins/,无需自行编译。
+#
+# 触发:
+#   git tag v1.0.0 && git push origin v1.0.0
+# 也可在 Actions 页面手动触发(workflow_dispatch)。
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 创建 Release 需要
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (with framework submodule)
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # 插件以框架源码(submodule)为编译依赖,先安装框架到本地仓库。
+      - name: Build & install framework
+        run: |
+          mvn -B -f jnimble-framework/pom.xml clean install \
+            -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
+
+      - name: Build plugins
+        run: |
+          mvn -B -f plugins/pom.xml clean package \
+            -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
+
+      - name: Collect plugin JARs
+        id: collect
+        run: |
+          mkdir -p dist
+          cp plugins/jnimble-plugin-*/target/jnimble-plugin-*.jar dist/
+          echo "== JARs =="
+          ls -1 dist/
+
+      - name: Build bundle zip (whole ordering system)
+        id: bundle
+        run: |
+          VERSION="${GITHUB_REF_NAME:-snapshot}"
+          ZIP="ordering-system-${VERSION}.zip"
+          (cd dist && zip -j "../${ZIP}" *.jar)
+          echo "zip=${ZIP}" >> "$GITHUB_OUTPUT"
+          echo "== ${ZIP} =="
+          unzip -l "${ZIP}" | tail -n +1
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.jar
+            ordering-system-*.zip
+          generate_release_notes: true
+          body: |
+            插件预构建包。下载后放入框架 `jnimble-starter/data/plugins/` 即可。
+
+            - 各插件 JAR:`jnimble-plugin-<id>-<版本>.jar`
+            - 整套包:`ordering-system-<版本>.zip`(含全部插件 JAR,推荐)
+
+            组装说明见框架仓库 `docs/blueprints/ordering-system.md`。

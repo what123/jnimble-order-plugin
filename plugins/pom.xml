@@ -24,7 +24,47 @@
         <module>jnimble-plugin-payment</module>
         <module>jnimble-plugin-printer-core</module>
         <module>jnimble-plugin-printer-feie</module>
+        <module>jnimble-plugin-scan-consumer</module>
     </modules>
+
+    <!--
+        开发期输出目录:插件 JAR 打包后直接落到框架 starter 的插件目录,
+        由 starter 的 PluginDirectoryInitializer/PluginDirectoryWatcher 以 JAR 方式
+        安装/热部署。这样 starter 无需依赖任何业务插件(classpath 保持干净),
+        依赖方向仍是"插件侧 -> 平台"。
+        覆盖方式:mvn -Dplugin.deploy.dir=/abs/path package
+    -->
+    <properties>
+        <plugin.deploy.dir>${project.basedir}/../../jnimble-framework/jnimble-starter/data/plugins</plugin.deploy.dir>
+    </properties>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>deploy-plugin-jar</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <mkdir dir="${plugin.deploy.dir}"/>
+                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                      todir="${plugin.deploy.dir}"
+                                      overwrite="true"
+                                      failonerror="false"/>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 
     <!--
         本仓库内部模块互引的版本统一在此声明,便于一处修改。
@@ -75,6 +115,11 @@
             <dependency>
                 <groupId>com.jnimble</groupId>
                 <artifactId>jnimble-plugin-printer-feie</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-scan-consumer</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

@@ -61,17 +61,12 @@ git submodule update --init --recursive
 
 ### 2. Build & Run (Development Mode, recommended)
 
-In dev mode, the starter pulls every plugin under `plugins/` onto its classpath. **No JAR packaging, no copying to `data/plugins/`** — just `spring-boot:run` after editing code.
+The starter does **not** depend on any business plugin — its classpath stays clean. Plugins are installed as JARs from
+`jnimble-framework/jnimble-starter/data/plugins/`, loaded by the starter's `PluginDirectoryInitializer` (startup scan)
+and `PluginDirectoryWatcher` (runtime hot-deploy). The dependency direction is always *plugin → platform*.
+See [`doc/dev-workflow.md`](doc/dev-workflow.md).
 
-> ⚠️ **One-time patch step**: two local working-tree changes (starter pom deps + `dev-classpath-enabled=true`) are required in the framework submodule to enable clone-and-run. They are intentionally **not pushed** to `what123/JNimble` upstream, so apply them locally after clone:
->
-> ```bash
-> bash scripts/apply-dev-classpath.sh
-> ```
->
-> Idempotent — re-running on an already-patched tree is a no-op. Re-run once after each `git submodule update`. See [`doc/dev-classpath-setup.md`](doc/dev-classpath-setup.md) for details.
-
-Install the framework to local Maven (starter depends on its modules):
+Install the framework to local Maven (both the starter and the plugin builds depend on it):
 
 ```bash
 cd jnimble-framework
@@ -79,10 +74,11 @@ mvn clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
 cd ..
 ```
 
-Install business plugins to local Maven (dev classpath discovery reads from `~/.m2`):
+Build the plugins (artifacts are written to the plugin directory above):
 
 ```bash
-mvn -f plugins/pom.xml clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
+bash scripts/build-plugins.sh
+# equivalent to: mvn -f plugins/pom.xml package -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
 ```
 
 Set env vars and start the starter:
@@ -97,51 +93,44 @@ cd jnimble-framework
 mvn -pl jnimble-starter spring-boot:run
 ```
 
-Visit http://localhost:8080/admin, sign in as `admin` / the `JNIMBLE_DEFAULT_ADMIN_PASSWORD` you set. Business plugins appear in the sidebar automatically.
+Visit http://localhost:8080/admin, sign in as `admin` / the `JNIMBLE_DEFAULT_ADMIN_PASSWORD` you set. Business plugins appear in the sidebar.
 
-> ⚠️ The clone-and-run capability depends on two local changes in `jnimble-framework/jnimble-starter`:
-> - `jnimble-starter/pom.xml` adds `<dependency>` entries for every business plugin module (classpath inclusion)
-> - `jnimble-starter/src/main/resources/application.yml` changes `jnimble.plugins.dev-classpath-enabled` default from `false` to `true`
->
-> These changes **are not pushed to `what123/JNimble` upstream**. After cloning this repo, apply them via `bash scripts/apply-dev-classpath.sh` (idempotent). Re-run the script after each `git submodule update`. See [`doc/dev-classpath-setup.md`](doc/dev-classpath-setup.md).
+To change a plugin during development, run `mvn -f plugins/pom.xml package` (or `bash scripts/build-plugins.sh`) again — the new JAR lands in `data/plugins/` and the running app **hot-deploys** it, no restart needed.
 
-### 3. Production Deployment (JAR-based)
+> Why not let the starter depend on plugins: that makes the *platform* depend on plugins (wrong direction) and masks
+> real dependencies (e.g. the license-issuer plugin needs the framework module `jnimble-license-sdk`). Keeping the
+> coupling in the business-side build preserves the *plugin → platform* direction.
 
-For production, disable classpath discovery and use the plugin directory hot-deploy:
+### 3. Production Deployment
+
+Same mechanism as development: drop the plugin JARs into the target starter's `data/plugins/`; keep
+`dev-classpath-enabled` at its default `false` (directory load + runtime hot-deploy).
 
 ```bash
-mvn -f plugins/pom.xml package -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
-
-# Copy each plugin JAR to the production starter's data/plugins/
-cp plugins/jnimble-plugin-*/target/jnimble-plugin-*.jar <production-starter-dir>/data/plugins/
+bash scripts/build-plugins.sh            # or mvn -f plugins/pom.xml package
+# artifacts are already in jnimble-framework/jnimble-starter/data/plugins/; copy them to the production starter's data/plugins/
 ```
-
-Set `JNIMBLE_DEV_CLASSPATH_ENABLED=false` (or leave the application.yml default) when starting in production.
 
 ## Configuration Switch: `jnimble.plugins.dev-classpath-enabled`
 
-Controls whether the starter auto-discovers and installs plugins from its classpath.
+Controls whether the starter auto-discovers and installs plugins from its **classpath**.
 
 | Value | Behavior | Use Case |
 |-------|----------|----------|
-| `true` (this repo's default) | Starter scans `META-INF/jnimble-plugin.json` on classpath, installs and `boot()`s each plugin directly. Code edits take effect on restart, no JAR build needed. | Development |
-| `false` (upstream default) | Classpath discovery off; plugins only load from `data/plugins/` directory. | Production |
+| `false` (default) | Load JARs only from the `data/plugins/` directory | Used for both dev and prod in this repo |
+| `true` | Scan `META-INF/jnimble-plugin.json` on the classpath and install | Only when you place plugins on the runtime classpath yourself |
 
-How to set:
-
-- Env var: `JNIMBLE_DEV_CLASSPATH_ENABLED=true|false` (highest priority)
-- `application.yml`: `jnimble.plugins.dev-classpath-enabled: true|false`
-
-**Prerequisite**: when `dev-classpath-enabled=true`, the starter's pom must declare each business plugin as a `<dependency>` so its classes are on the classpath. `jnimble-framework/jnimble-starter/pom.xml` already does this (applied via the patch script).
+> Note: `true` requires plugin classes to be on the **application runtime classpath**, i.e. the app must depend on the
+> plugins — which breaks the "platform must not depend on plugins" direction. This repo does not use it.
 
 ## Plugin Layout Convention
 
 ```
 jnimble-order-plugin/
 ├── jnimble-framework/                    # upstream framework submodule
-│   └── jnimble-starter/                  # dev-time launch entry
-│       ├── pom.xml                       # LOCAL CHANGE: depends on plugins/*
-│       └── src/main/resources/application.yml  # LOCAL CHANGE: dev-classpath-enabled=true
+│   └── jnimble-starter/                  # launch entry (starter depends on no business plugin)
+│       ├── pom.xml                       # framework modules only
+│       └── data/plugins/                 # plugin JAR directory (build output lands here)
 └── plugins/
     ├── pom.xml                           # aggregation + dependencyManagement for inter-plugin versions
     └── jnimble-plugin-*/                # each business plugin
@@ -157,6 +146,7 @@ jnimble-order-plugin/
 
 ## Development Conventions
 
+- Plugin development guide: [`doc/plugin-development.md`](doc/plugin-development.md) (layout, descriptor fields, extension points, migrations, i18n, dependencies, pitfalls, full example)
 - Plugin template paths MUST start with `plugin/{pluginId}/`
 - Permission codes MUST start with `{pluginId}.` — otherwise they won't sync to role management
 - For DB changes, only add new `V{n}__*.sql` scripts; never edit existing ones (Flyway checksum)
@@ -168,9 +158,8 @@ jnimble-order-plugin/
 - Framework source: [what123/JNimble](https://github.com/what123/JNimble)
 - This repository tracks a specific commit of `what123/JNimble` via the `jnimble-framework/` submodule.
   Run `git submodule status` to see the pinned commit.
-- Upstream framework is intentionally left unmodified in this repo's commit history; the two
-  working-tree patches enabling dev-classpath mode are applied locally via
-  [`scripts/apply-dev-classpath.sh`](scripts/apply-dev-classpath.sh) and never pushed upstream.
+- Upstream framework is intentionally left unmodified in this repo's commit history; business plugins are not
+  coupled into framework source — the dependency direction is always *plugin → platform*.
 
 ## License
 

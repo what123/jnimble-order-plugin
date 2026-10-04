@@ -61,17 +61,12 @@ git submodule update --init --recursive
 
 ### 2. 构建 & 本地启动(开发模式,推荐)
 
-开发模式下,starter 会把 `plugins/` 下所有业务插件作为 classpath 依赖直接引入,**无需打 JAR、无需拷贝到 `data/plugins/`**,改完代码直接 `spring-boot:run` 即可看到效果。
+starter **不依赖任何业务插件**,classpath 保持干净;插件以 JAR 方式从
+`jnimble-framework/jnimble-starter/data/plugins/` 目录安装,由 starter 的
+`PluginDirectoryInitializer`(启动扫描)与 `PluginDirectoryWatcher`(运行期热部署)负责加载。
+依赖方向始终是"插件 → 平台"。详见 [`doc/dev-workflow.md`](doc/dev-workflow.md)。
 
-> ⚠️ **一次性补丁步骤**:framework submodule 需要两处本地改动(starter pom 加业务插件依赖、application.yml 开 `dev-classpath-enabled`)才能开启 clone-and-run。这两处改动**有意不推送**到 `what123/JNimble` 上游,clone 后通过下面脚本应用到本地 working tree:
->
-> ```bash
-> bash scripts/apply-dev-classpath.sh
-> ```
->
-> 脚本幂等,已应用的工作树会直接返回。每次 `git submodule update` 升级 framework 后需重新跑一次。详见 [`doc/dev-classpath-setup.md`](doc/dev-classpath-setup.md)。
-
-首次启动前,先安装 framework 到本地 Maven 仓库(starter 依赖 framework 各模块):
+首次启动前,先安装 framework 到本地 Maven 仓库(starter 与插件的编译都依赖它):
 
 ```bash
 cd jnimble-framework
@@ -79,10 +74,11 @@ mvn clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
 cd ..
 ```
 
-再安装业务插件到本地仓库(开发期 classpath 发现依赖 `~/.m2` 中的 JAR):
+构建插件(产物自动输出到上面的插件目录):
 
 ```bash
-mvn -f plugins/pom.xml clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
+bash scripts/build-plugins.sh
+# 等价于: mvn -f plugins/pom.xml package -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
 ```
 
 设置环境变量并启动 starter:
@@ -97,51 +93,41 @@ cd jnimble-framework
 mvn -pl jnimble-starter spring-boot:run
 ```
 
-启动后访问 http://localhost:8080/admin,使用 `admin` / `JNIMBLE_DEFAULT_ADMIN_PASSWORD` 登录,业务插件会自动出现在侧边栏。
+启动后访问 http://localhost:8080/admin,使用 `admin` / `JNIMBLE_DEFAULT_ADMIN_PASSWORD` 登录,业务插件出现在侧边栏。
 
-> ⚠️ "clone 即可开发"能力依赖于 `jnimble-framework/jnimble-starter` 的两处本地改动:
-> - `jnimble-starter/pom.xml` 为每个业务插件模块添加 `<dependency>`(classpath 引入)
-> - `jnimble-starter/src/main/resources/application.yml` 把 `jnimble.plugins.dev-classpath-enabled` 默认值从 `false` 改为 `true`
->
-> 这两处改动**不会 push 到 `what123/JNimble` 上游仓库**。clone 本仓库后通过 `bash scripts/apply-dev-classpath.sh` 应用(脚本幂等)。每次 `git submodule update` 升级 framework 后需重新跑一次脚本(见 [`doc/dev-classpath-setup.md`](doc/dev-classpath-setup.md))。
+开发期改插件:重新 `mvn -f plugins/pom.xml package`(或 `bash scripts/build-plugins.sh`),新 JAR 落盘后运行中的应用会**热部署**该插件,无需重启。
 
-### 3. 生产部署(打包成 JAR)
+> 为什么不让 starter 依赖插件:那会让"平台侧依赖插件",方向反了,也会掩盖真实依赖(例如 license-issuer 插件需要框架模块 `jnimble-license-sdk`)。当前做法把耦合留在业务侧构建,依赖方向始终是"插件 → 平台"。
 
-生产环境关闭 classpath 发现,改用插件目录热部署:
+### 3. 生产部署
+
+与开发同一机制:把插件 JAR 放进目标 starter 的 `data/plugins/` 即可,
+`dev-classpath-enabled` 保持默认 `false`(目录加载 + 运行期热部署)。
 
 ```bash
-mvn -f plugins/pom.xml package -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
-
-# 把各插件 target/*.jar 拷到生产 starter 的 data/plugins/
-cp plugins/jnimble-plugin-*/target/jnimble-plugin-*.jar <生产 starter 目录>/data/plugins/
+bash scripts/build-plugins.sh            # 或 mvn -f plugins/pom.xml package
+# 产物已在 jnimble-framework/jnimble-starter/data/plugins/,拷到生产 starter 的 data/plugins/ 即可
 ```
-
-生产启动时设置环境变量 `JNIMBLE_DEV_CLASSPATH_ENABLED=false`(或不设,视 application.yml 的默认值)。
 
 ## 关键配置开关:`jnimble.plugins.dev-classpath-enabled`
 
-控制 starter 是否从 classpath 自动发现并安装插件。
+控制 starter 是否从 **classpath** 自动发现并安装插件。
 
 | 取值 | 行为 | 适用场景 |
 |------|------|---------|
-| `true`(本仓库默认) | starter 启动时扫描 classpath 上所有 `META-INF/jnimble-plugin.json`,直接以 classpath 形式安装并 `boot()`。改代码后重启即生效,不需要打 JAR | 开发期 |
-| `false`(framework 上游默认) | 关闭 classpath 发现,只从 `data/plugins/` 目录加载 JAR | 生产部署 |
+| `false`(默认) | 只从 `data/plugins/` 目录加载 JAR | 本仓库开发与生产统一使用 |
+| `true` | 扫描 classpath 上的 `META-INF/jnimble-plugin.json` 并安装 | 需自行把插件置于运行时 classpath |
 
-设置方式:
-
-- 环境变量:`JNIMBLE_DEV_CLASSPATH_ENABLED=true|false`(优先级最高)
-- `application.yml`:`jnimble.plugins.dev-classpath-enabled: true|false`
-
-**配套条件**:开 `dev-classpath-enabled=true` 时,starter 的 pom 必须把业务插件作为 `<dependency>` 引入,否则 classpath 上没有插件类,发现不到。`jnimble-framework/jnimble-starter/pom.xml` 已通过补丁脚本完成这一步。
+> 注意:`true` 需要插件类出现在**应用运行时 classpath** 上,即应用必须依赖插件,会破坏"平台不依赖插件"的方向约束。本仓库不使用该模式。
 
 ## 插件目录约定
 
 ```
 jnimble-order-plugin/
 ├── jnimble-framework/                    # 上游框架 submodule
-│   └── jnimble-starter/                  # 开发期启动入口
-│       ├── pom.xml                       # 本地改动:依赖 plugins/*
-│       └── src/main/resources/application.yml  # 本地改动:dev-classpath-enabled=true
+│   └── jnimble-starter/                  # 启动入口(starter 不依赖业务插件)
+│       ├── pom.xml                       # 仅框架模块依赖
+│       └── data/plugins/                 # 插件 JAR 目录(构建产物落盘于此)
 └── plugins/
     ├── pom.xml                           # 聚合 + dependencyManagement 统一内部版本
     └── jnimble-plugin-*/                 # 各业务插件
@@ -157,6 +143,7 @@ jnimble-order-plugin/
 
 ## 开发约定
 
+- 插件开发完整指南见 [`doc/plugin-development.md`](doc/plugin-development.md)(目录结构、描述符字段、扩展点、迁移、i18n、依赖、常见坑、完整示例)
 - 插件模板路径必须以 `plugin/{pluginId}/` 开头
 - 权限码必须以 `{pluginId}.` 开头,否则不会同步到角色管理
 - 数据库变更只加新 `V{n}__*.sql` 脚本,不改旧脚本(Flyway checksum)
@@ -167,7 +154,7 @@ jnimble-order-plugin/
 
 - 框架源码:[what123/JNimble](https://github.com/what123/JNimble)
 - 本仓库通过 `jnimble-framework/` submodule 固定指向 `what123/JNimble` 的某个 commit,运行 `git submodule status` 可查看固定版本。
-- 上游框架在本仓库的提交历史中**保持原状、未被修改**;开启开发模式所需的两处 working-tree 补丁通过 [`scripts/apply-dev-classpath.sh`](scripts/apply-dev-classpath.sh) 本地应用,不会推送到上游。
+- 上游框架在本仓库的提交历史中**保持原状、未被修改**;业务插件不与框架源码耦合,依赖方向恒为"插件 → 平台"。
 
 ## 授权
 
