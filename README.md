@@ -7,7 +7,7 @@
 
 English | [中文](README_CN.md)
 
-> **Built on [JNimble](https://github.com/what123/JNimble)** — a plugin-driven Java admin framework. This repository aggregates a set of business plugins (ordering, payment, printing, menu, CRM, license issuer, etc.) developed on top of JNimble. The framework is referenced as a git submodule under `jnimble-framework/`, pinned to a specific commit of `what123/JNimble`.
+> **Built on [JNimble](https://github.com/what123/JNimble)** — a plugin-driven Java admin framework. This repository ships a set of business plugins (ordering, payment, printing, menu, CRM, license issuer, etc.) developed on top of JNimble. The framework is fetched locally into `jnimble-framework/` by `scripts/setup-framework.sh` (gitignored — this repo contains plugins only).
 
 ## Overview
 
@@ -30,13 +30,15 @@ Bundled plugins:
 
 ```
 jnimble-order-plugin/
-├── jnimble-framework/      # upstream framework submodule (what123/JNimble, pinned commit)
-└── plugins/               # business plugin aggregation (pom)
-    ├── pom.xml            # parent -> ../jnimble-framework, dependencyManagement for inter-plugin versions
-    └── jnimble-plugin-*/  # 8 business plugins
+├── plugins/               # business plugin aggregation (pom)
+│   ├── pom.xml            # parent -> ../jnimble-framework, dependencyManagement for inter-plugin versions
+│   └── jnimble-plugin-*/  # business plugins
+├── scripts/               # setup-framework.sh, build-plugins.sh
+├── doc/                   # plugin development guide & docs
+└── jnimble-framework/     # local framework checkout (gitignored; created by scripts/setup-framework.sh)
 ```
 
-The framework is referenced as a submodule so the plugins can compile against local framework source — convenient for two-sided debugging. Upstream framework source is **not modified** in this repo's history; two local working-tree patches (see [Development Mode](#development-mode-clone--run)) enable "clone and run" without touching upstream.
+This repo contains **only plugin code**. For development, `scripts/setup-framework.sh` clones the framework into a gitignored `jnimble-framework/` directory and installs it to your local Maven repository, so plugins can compile against it.
 
 ## Requirements
 
@@ -46,17 +48,11 @@ The framework is referenced as a submodule so the plugins can compile against lo
 
 ## Quick Start
 
-### 1. Clone (with submodule)
+### 1. Clone
 
 ```bash
-git clone --recurse-submodules https://github.com/what123/jnimble-order-plugin.git
+git clone https://github.com/what123/jnimble-order-plugin.git
 cd jnimble-order-plugin
-```
-
-If you forgot `--recurse-submodules`:
-
-```bash
-git submodule update --init --recursive
 ```
 
 ### 2. Build & Run (Development Mode, recommended)
@@ -66,12 +62,11 @@ The starter does **not** depend on any business plugin — its classpath stays c
 and `PluginDirectoryWatcher` (runtime hot-deploy). The dependency direction is always *plugin → platform*.
 See [`doc/dev-workflow.md`](doc/dev-workflow.md).
 
-Install the framework to local Maven (both the starter and the plugin builds depend on it):
+Fetch & install the framework to local Maven (both the starter and the plugin builds depend on it):
 
 ```bash
-cd jnimble-framework
-mvn clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
-cd ..
+bash scripts/setup-framework.sh
+# clones what123/JNimble into ./jnimble-framework (gitignored) and runs mvn install
 ```
 
 Build the plugins (artifacts are written to the plugin directory above):
@@ -127,7 +122,7 @@ Controls whether the starter auto-discovers and installs plugins from its **clas
 
 ```
 jnimble-order-plugin/
-├── jnimble-framework/                    # upstream framework submodule
+├── jnimble-framework/                    # local framework checkout (gitignored; created by setup-framework.sh)
 │   └── jnimble-starter/                  # launch entry (starter depends on no business plugin)
 │       ├── pom.xml                       # framework modules only
 │       └── data/plugins/                 # plugin JAR directory (build output lands here)
@@ -156,10 +151,9 @@ jnimble-order-plugin/
 ## Upstream
 
 - Framework source: [what123/JNimble](https://github.com/what123/JNimble)
-- This repository tracks a specific commit of `what123/JNimble` via the `jnimble-framework/` submodule.
-  Run `git submodule status` to see the pinned commit.
-- Upstream framework is intentionally left unmodified in this repo's commit history; business plugins are not
-  coupled into framework source — the dependency direction is always *plugin → platform*.
+- This repository contains **plugins only** — the framework is not vendored or tracked here. `scripts/setup-framework.sh`
+  fetches it into a gitignored `jnimble-framework/` directory for building.
+- Business plugins are not coupled into framework source — the dependency direction is always *plugin → platform*.
 
 ## License
 

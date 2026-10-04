@@ -7,7 +7,7 @@
 
 [English](README.md) | 中文
 
-> **基于 [JNimble](https://github.com/what123/JNimble) 开发** —— JNimble 是一个插件化的 Java 后台管理框架。本仓库在其之上开发了若干业务插件(点餐、支付、打印、菜单、CRM、License 等),通过 git submodule 的方式把框架源码引入到 `jnimble-framework/` 目录,固定指向 `what123/JNimble` 的某个 commit。
+> **基于 [JNimble](https://github.com/what123/JNimble) 开发** —— JNimble 是一个插件化的 Java 后台管理框架。本仓库在其之上提供一套业务插件(点餐、支付、打印、菜单、CRM、License 等)。框架由 `scripts/setup-framework.sh` 拉取到本地 `jnimble-framework/`(被 gitignore,**本仓库只含插件**)。
 
 ## 项目简介
 
@@ -30,13 +30,15 @@
 
 ```
 jnimble-order-plugin/
-├── jnimble-framework/      # 上游框架 submodule(what123/JNimble,固定 commit)
-└── plugins/               # 业务插件聚合(pom)
-    ├── pom.xml            # parent -> ../jnimble-framework,dependencyManagement 统一内部版本
-    └── jnimble-plugin-*/  # 8 个业务插件
+├── plugins/               # 业务插件聚合(pom)
+│   ├── pom.xml            # parent -> ../jnimble-framework,dependencyManagement 统一内部版本
+│   └── jnimble-plugin-*/  # 各业务插件
+├── scripts/               # setup-framework.sh、build-plugins.sh
+├── doc/                   # 插件开发指南与相关文档
+└── jnimble-framework/     # 本地框架 checkout(被 gitignore,由 scripts/setup-framework.sh 生成)
 ```
 
-框架以 submodule 引入,便于插件编译期直接引用本地框架源码、支持两侧联调。**不修改上游框架源码**;为了让"clone 即可开发"成立,framework submodule 有两处本地 working-tree 补丁(见 [开发模式:clone 即跑](#开发模式clone-即跑)),不会进入上游仓库的提交历史。
+本仓库**只含插件代码**。开发时,`scripts/setup-framework.sh` 会把框架克隆到被忽略的 `jnimble-framework/` 并安装到本地 Maven 仓库,供插件编译使用。
 
 ## 环境要求
 
@@ -46,17 +48,11 @@ jnimble-order-plugin/
 
 ## 快速开始
 
-### 1. 克隆(带 submodule)
+### 1. 克隆
 
 ```bash
-git clone --recurse-submodules https://github.com/what123/jnimble-order-plugin.git
+git clone https://github.com/what123/jnimble-order-plugin.git
 cd jnimble-order-plugin
-```
-
-如果已经 clone 但忘了带 `--recurse-submodules`:
-
-```bash
-git submodule update --init --recursive
 ```
 
 ### 2. 构建 & 本地启动(开发模式,推荐)
@@ -66,12 +62,11 @@ starter **不依赖任何业务插件**,classpath 保持干净;插件以 JAR 方
 `PluginDirectoryInitializer`(启动扫描)与 `PluginDirectoryWatcher`(运行期热部署)负责加载。
 依赖方向始终是"插件 → 平台"。详见 [`doc/dev-workflow.md`](doc/dev-workflow.md)。
 
-首次启动前,先安装 framework 到本地 Maven 仓库(starter 与插件的编译都依赖它):
+首次启动前,拉取并安装 framework 到本地 Maven 仓库(starter 与插件的编译都依赖它):
 
 ```bash
-cd jnimble-framework
-mvn clean install -DskipTests -Dcheckstyle.skip=true -Dspotbugs.skip=true
-cd ..
+bash scripts/setup-framework.sh
+# 把 what123/JNimble 克隆到 ./jnimble-framework(被 gitignore)并执行 mvn install
 ```
 
 构建插件(产物自动输出到上面的插件目录):
@@ -124,7 +119,7 @@ bash scripts/build-plugins.sh            # 或 mvn -f plugins/pom.xml package
 
 ```
 jnimble-order-plugin/
-├── jnimble-framework/                    # 上游框架 submodule
+├── jnimble-framework/                    # 本地框架 checkout(被 gitignore,由 setup-framework.sh 生成)
 │   └── jnimble-starter/                  # 启动入口(starter 不依赖业务插件)
 │       ├── pom.xml                       # 仅框架模块依赖
 │       └── data/plugins/                 # 插件 JAR 目录(构建产物落盘于此)
@@ -153,7 +148,7 @@ jnimble-order-plugin/
 ## 上游仓库
 
 - 框架源码:[what123/JNimble](https://github.com/what123/JNimble)
-- 本仓库通过 `jnimble-framework/` submodule 固定指向 `what123/JNimble` 的某个 commit,运行 `git submodule status` 可查看固定版本。
+- 本仓库**只含插件**;框架不在此跟踪,由 `scripts/setup-framework.sh` 拉取到被忽略的 `jnimble-framework/` 供构建使用。
 - 上游框架在本仓库的提交历史中**保持原状、未被修改**;业务插件不与框架源码耦合,依赖方向恒为"插件 → 平台"。
 
 ## 授权
