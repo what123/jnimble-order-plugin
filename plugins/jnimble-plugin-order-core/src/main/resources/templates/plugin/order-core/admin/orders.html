@@ -89,8 +89,10 @@
             methods: {
                 fetchTables: function () {
                     var self = this;
-                    axios.get('/tables/list').then(function (res) {
+                    axios.get(window.location.origin + '/admin/plugins/order-table/tables/list').then(function (res) {
                         self.tables = res.data;
+                    }).catch(function () {
+                        self.tables = [];
                     });
                 },
                 fetchOrders: function () {
