@@ -17,7 +17,6 @@
 
     <modules>
         <module>jnimble-plugin-demo-crm</module>
-        <module>jnimble-plugin-license-issuer</module>
         <module>jnimble-plugin-menu-manager</module>
         <module>jnimble-plugin-order-core</module>
         <module>jnimble-plugin-order-table</module>
@@ -68,23 +67,13 @@
 
     <!--
         本仓库内部模块互引的版本统一在此声明,便于一处修改。
-        jnimble-plugin-* 和 jnimble-license-sdk 都跟随本仓库 0.1.0-SNAPSHOT。
+        jnimble-plugin-* 跟随本仓库 0.1.0-SNAPSHOT。
     -->
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>com.jnimble</groupId>
-                <artifactId>jnimble-license-sdk</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.jnimble</groupId>
                 <artifactId>jnimble-plugin-demo-crm</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.jnimble</groupId>
-                <artifactId>jnimble-plugin-license-issuer</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

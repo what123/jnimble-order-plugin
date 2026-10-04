@@ -24,7 +24,6 @@ Bundled plugins:
 | `jnimble-plugin-printer-feie` | Feie (飞鹅) cloud printer driver |
 | `jnimble-plugin-menu-manager` | Menu / product / spec management |
 | `jnimble-plugin-demo-crm` | Demo CRM plugin (reference for hook/route/asset registration) |
-| `jnimble-plugin-license-issuer` | License issuer UI + key management (admin side of `jnimble-license-sdk`) |
 
 ## Repository Layout
 
@@ -93,8 +92,8 @@ Visit http://localhost:8080/admin, sign in as `admin` / the `JNIMBLE_DEFAULT_ADM
 To change a plugin during development, run `mvn -f plugins/pom.xml package` (or `bash scripts/build-plugins.sh`) again — the new JAR lands in `data/plugins/` and the running app **hot-deploys** it, no restart needed.
 
 > Why not let the starter depend on plugins: that makes the *platform* depend on plugins (wrong direction) and masks
-> real dependencies (e.g. the license-issuer plugin needs the framework module `jnimble-license-sdk`). Keeping the
-> coupling in the business-side build preserves the *plugin → platform* direction.
+> the plugins' real dependencies. Keeping the coupling in the business-side build preserves the *plugin → platform*
+> direction.
 
 ### 3. Production Deployment
 

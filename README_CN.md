@@ -24,7 +24,6 @@
 | `jnimble-plugin-printer-feie` | 飞鹅云打印机驱动 |
 | `jnimble-plugin-menu-manager` | 菜单 / 商品 / 规格管理 |
 | `jnimble-plugin-demo-crm` | CRM 示例插件(hook/route/asset 注册参考实现) |
-| `jnimble-plugin-license-issuer` | License 签发后台 UI 与密钥管理(`jnimble-license-sdk` 的管理端) |
 
 ## 仓库结构
 
@@ -92,7 +91,7 @@ mvn -pl jnimble-starter spring-boot:run
 
 开发期改插件:重新 `mvn -f plugins/pom.xml package`(或 `bash scripts/build-plugins.sh`),新 JAR 落盘后运行中的应用会**热部署**该插件,无需重启。
 
-> 为什么不让 starter 依赖插件:那会让"平台侧依赖插件",方向反了,也会掩盖真实依赖(例如 license-issuer 插件需要框架模块 `jnimble-license-sdk`)。当前做法把耦合留在业务侧构建,依赖方向始终是"插件 → 平台"。
+> 为什么不让 starter 依赖插件:那会让"平台侧依赖插件",方向反了,也会掩盖插件的真实依赖。当前做法把耦合留在业务侧构建,依赖方向始终是"插件 → 平台"。
 
 ### 3. 生产部署
 

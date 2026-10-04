@@ -349,4 +349,3 @@ class CrmPluginBootTest {
 | `jnimble-plugin-printer-core` | SPI 扩展点(驱动注册表)、调度 |
 | `jnimble-plugin-printer-feie` | 依赖 printer-core、实现 SPI 驱动 |
 | `jnimble-plugin-payment` | 声明式配置表单 |
-| `jnimble-plugin-license-issuer` | 依赖框架模块 `jnimble-license-sdk` 的示例 |
