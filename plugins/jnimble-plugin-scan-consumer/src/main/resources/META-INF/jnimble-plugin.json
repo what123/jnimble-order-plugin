@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0",
+  "id": "scan-consumer",
+  "name": "Scan Consumer Plugin",
+  "nameKey": "plugin.scan-consumer.name",
+  "description": "Consumer-facing API plugin for scan-to-order",
+  "descriptionKey": "plugin.scan-consumer.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.scan.ScanConsumerPluginBoot",
+  "spring": {
+    "configurationClass": "com.jnimble.plugin.scan.ScanConsumerPluginConfiguration"
+  },
+  "i18n": {
+    "basename": "i18n/messages"
+  },
+  "permissions": [
+    {
+      "code": "scan-consumer.api",
+      "name": "Access consumer API",
+      "nameKey": "permission.scan-consumer.api"
+    }
+  ],
+  "dependencies": [
+    {"pluginId": "order-core", "version": "1.x", "required": true},
+    {"pluginId": "menu-manager", "version": "1.x", "required": true},
+    {"pluginId": "order-table", "version": "1.x", "required": true}
+  ],
+  "migration": {
+    "enabled": true,
+    "location": "classpath:db/migration/plugin/scan-consumer",
+    "table": "flyway_schema_history_scan_consumer",
+    "baselineOnMigrate": true,
+    "failOnError": true
+  }
+}
