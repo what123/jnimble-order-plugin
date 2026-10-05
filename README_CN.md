@@ -7,7 +7,9 @@
 
 [English](README.md) | 中文
 
-> **基于 [JNimble](https://github.com/what123/JNimble) 开发** —— JNimble 是一个插件化的 Java 后台管理框架。本仓库在其之上提供一套业务插件(点餐、支付、打印、菜单、CRM、License 等)。框架由 `scripts/setup-framework.sh` 拉取到本地 `jnimble-framework/`(被 gitignore,**本仓库只含插件**)。
+> **基于 [JNimble](https://github.com/what123/JNimble) 开发** —— JNimble 是一个**插件化**的 Java 后台管理框架(Spring Boot 3 · Java 21 · MyBatis-Plus · Thymeleaf):框架只提供用户 / 角色 / 权限 / 审计 / 插件运行时 / 后台外壳,所有业务能力都以**插件 JAR** 交付,安装即用、卸载即除。本仓库在其之上提供一整套点餐业务插件(点餐、桌台、支付、打印、菜单、扫码、CRM 等)。
+>
+> 🔗 **框架仓库(一起用才完整):[https://github.com/what123/JNimble](https://github.com/what123/JNimble)** —— 插件要装进框架才能运行,详见下方"快速开始"。
 
 ## 项目简介
 
@@ -23,6 +25,7 @@
 | `jnimble-plugin-printer-core` | 打印机抽象与模板注册 |
 | `jnimble-plugin-printer-feie` | 飞鹅云打印机驱动 |
 | `jnimble-plugin-menu-manager` | 菜单 / 商品 / 规格管理 |
+| `jnimble-plugin-scan-consumer` | 面向消费者的扫码点餐 API |
 | `jnimble-plugin-demo-crm` | CRM 示例插件(hook/route/asset 注册参考实现) |
 
 ## 仓库结构
@@ -38,6 +41,22 @@ jnimble-order-plugin/
 ```
 
 本仓库**只含插件代码**。开发时,`scripts/setup-framework.sh` 会把框架克隆到被忽略的 `jnimble-framework/` 并安装到本地 Maven 仓库,供插件编译使用。
+
+## 界面预览
+
+> 一套由插件组装出来的点餐系统(**JNimble 框架 + 本仓库插件**)。完整流程:开台 → 点菜 → 下单 → 后厨 → 结账。
+
+**🪑 收银点餐**(桌位图 + 点菜 · `order-table`)
+![收银点餐](doc/images/pos.png)
+
+**🧾 订单管理**(订单状态机 · `order-core`)
+![订单管理](doc/images/orders.png)
+
+**👨‍🍳 后厨制作**(后厨排队 · `order-core`)
+![后厨制作](doc/images/kitchen.png)
+
+**🍽️ 菜品管理**(分类 / 菜品 / 规格 · `menu-manager`)
+![菜品管理](doc/images/menu-items.png)
 
 ## 环境要求
 

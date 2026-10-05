@@ -7,7 +7,9 @@
 
 English | [中文](README_CN.md)
 
-> **Built on [JNimble](https://github.com/what123/JNimble)** — a plugin-driven Java admin framework. This repository ships a set of business plugins (ordering, payment, printing, menu, CRM, license issuer, etc.) developed on top of JNimble. The framework is fetched locally into `jnimble-framework/` by `scripts/setup-framework.sh` (gitignored — this repo contains plugins only).
+> **Built on [JNimble](https://github.com/what123/JNimble)** — a **plugin-driven** Java admin framework (Spring Boot 3 · Java 21 · MyBatis-Plus · Thymeleaf). The framework provides only the foundation — users, roles, permissions, audit, plugin runtime, and the admin shell; **every business capability ships as a plugin JAR** (install to use, uninstall to remove). This repository ships a complete ordering / POS plugin set (ordering, tables, payment, printing, menu, scan-to-order, CRM, …) built on top of it.
+>
+> 🔗 **Framework repository (they run together): [what123/JNimble](https://github.com/what123/JNimble)** — plugins must be installed into the framework to run; see Quick Start below.
 
 ## Overview
 
@@ -23,6 +25,7 @@ Bundled plugins:
 | `jnimble-plugin-printer-core` | Printer abstraction and template registry |
 | `jnimble-plugin-printer-feie` | Feie (飞鹅) cloud printer driver |
 | `jnimble-plugin-menu-manager` | Menu / product / spec management |
+| `jnimble-plugin-scan-consumer` | Consumer-facing scan-to-order API |
 | `jnimble-plugin-demo-crm` | Demo CRM plugin (reference for hook/route/asset registration) |
 
 ## Repository Layout
@@ -38,6 +41,22 @@ jnimble-order-plugin/
 ```
 
 This repo contains **only plugin code**. For development, `scripts/setup-framework.sh` clones the framework into a gitignored `jnimble-framework/` directory and installs it to your local Maven repository, so plugins can compile against it.
+
+## Preview
+
+> A complete ordering / POS system assembled from plugins (**JNimble framework + the plugins in this repo**). Full flow: open table → take order → submit → kitchen → checkout.
+
+**🪑 POS / cashier** (table map + ordering · `order-table`)
+![POS ordering](doc/images/pos.png)
+
+**🧾 Order management** (order state machine · `order-core`)
+![Order management](doc/images/orders.png)
+
+**👨‍🍳 Kitchen** (kitchen queue · `order-core`)
+![Kitchen queue](doc/images/kitchen.png)
+
+**🍽️ Menu items** (categories / items / specs · `menu-manager`)
+![Menu items](doc/images/menu-items.png)
 
 ## Requirements
 
