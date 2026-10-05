@@ -137,7 +137,11 @@ public class PrinterAdminController {
     @GetMapping("/printers/drivers")
     @ResponseBody
     public Collection<?> listDrivers() {
-        return driverRegistry.allDrivers();
+        return driverRegistry.allDrivers().stream()
+                .map(driver -> Map.of(
+                        "driverId", driver.driverId(),
+                        "driverName", driver.driverName()))
+                .toList();
     }
 
     /**
