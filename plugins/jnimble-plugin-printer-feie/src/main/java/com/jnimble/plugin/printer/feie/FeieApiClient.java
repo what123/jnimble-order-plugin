@@ -33,7 +33,7 @@ public class FeieApiClient {
     private static final String FIELD_USER = "user";
     private static final String FIELD_UKEY = "ukey";
     private static final String FIELD_STIME = "stime";
-    private static final String FIELD_SIGN = "sign";
+    private static final String FIELD_SIGN = "sig";
     private static final String FIELD_APINAME = "apiname";
     private static final String FIELD_SN = "sn";
     private static final String FIELD_CONTENT = "content";
@@ -66,6 +66,10 @@ public class FeieApiClient {
 
     public FeieApiClient(String user, String ukey) {
         this(user, ukey, DEFAULT_GATEWAY, defaultHttpClient(), new ObjectMapper());
+    }
+
+    public FeieApiClient(String user, String ukey, String gateway) {
+        this(user, ukey, gateway, defaultHttpClient(), new ObjectMapper());
     }
 
     public FeieApiClient(String user, String ukey, String gateway, HttpClient httpClient, ObjectMapper objectMapper) {
