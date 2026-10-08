@@ -83,14 +83,17 @@ public class CartService {
                                                   String tagIds, Integer orderType) {
         CartEntity cart = getOrCreateCart(storeId, tableId, accessToken);
         MenuItemEntity menuItem = menuItemService.getItem(goodsId);
-        BigDecimal unitPrice = menuItem.getPrice();
-        BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(count));
+        SpecSelectionResolver.Resolution spec = SpecSelectionResolver.resolve(menuItem, tagIds);
+        BigDecimal basePrice = menuItem.getPrice() == null ? BigDecimal.ZERO : menuItem.getPrice();
+        BigDecimal unitPrice = basePrice.add(spec.priceAdjustment());
+        String normalizedTagIds = spec.normalizedTagIds();
+        BigDecimal totalPrice = unitPrice.multiply(BigDecimal.valueOf(Math.max(count, 0)));
 
         List<CartItemEntity> existingItems = MapperUtils.selectList(cartItemMapper, CartItemEntity.class,
                 wrapper -> {
                     wrapper.eq("cart_id", cart.getId()).eq("menu_item_id", goodsId);
-                    if (tagIds != null && !tagIds.isBlank()) {
-                        wrapper.eq("tag_ids", tagIds);
+                    if (normalizedTagIds != null) {
+                        wrapper.eq("tag_ids", normalizedTagIds);
                     } else {
                         wrapper.and(w -> w.isNull("tag_ids").or().eq("tag_ids", ""));
                     }
@@ -106,7 +109,9 @@ public class CartService {
         if (!existingItems.isEmpty()) {
             CartItemEntity item = existingItems.getFirst();
             item.setQuantity(count);
+            item.setUnitPrice(unitPrice);
             item.setTotalPrice(totalPrice);
+            item.setTagNames(spec.description());
             item.setUpdatedAt(LocalDateTime.now());
             return MapperUtils.updateById(cartItemMapper, item);
         }
@@ -118,7 +123,8 @@ public class CartService {
         newItem.setUnitPrice(unitPrice);
         newItem.setQuantity(count);
         newItem.setTotalPrice(totalPrice);
-        newItem.setTagIds(tagIds);
+        newItem.setTagIds(normalizedTagIds);
+        newItem.setTagNames(spec.description());
         newItem.setCreatedAt(LocalDateTime.now());
         newItem.setUpdatedAt(LocalDateTime.now());
         return MapperUtils.insert(cartItemMapper, newItem);

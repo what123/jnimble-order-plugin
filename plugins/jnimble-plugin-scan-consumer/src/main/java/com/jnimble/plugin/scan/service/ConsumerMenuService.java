@@ -3,7 +3,10 @@ package com.jnimble.plugin.scan.service;
 import com.jnimble.plugin.menu.model.entity.CategoryEntity;
 import com.jnimble.plugin.menu.model.entity.MenuItemEntity;
 import com.jnimble.plugin.menu.model.entity.MenuItemImageEntity;
+import com.jnimble.plugin.menu.model.entity.MenuItemSpecGroupEntity;
+import com.jnimble.plugin.menu.model.entity.MenuItemSpecOptionEntity;
 import com.jnimble.plugin.menu.service.CategoryService;
+import com.jnimble.plugin.menu.service.MenuItemImageUrls;
 import com.jnimble.plugin.menu.service.MenuItemService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -59,14 +62,14 @@ public class ConsumerMenuService {
         if (images != null && !images.isEmpty()) {
             for (MenuItemImageEntity img : images) {
                 Map<String, Object> pic = new java.util.HashMap<>();
-                pic.put("showUrl", img.getImagePath());
-                pic.put("showThumbnail", img.getImagePath());
+                pic.put("showUrl", MenuItemImageUrls.toPublic(img.getImagePath()));
+                pic.put("showThumbnail", MenuItemImageUrls.toPublic(img.getImagePath()));
                 pics.add(pic);
             }
         } else if (item.getImagePath() != null && !item.getImagePath().isBlank()) {
             Map<String, Object> pic = new java.util.HashMap<>();
-            pic.put("showUrl", item.getImagePath());
-            pic.put("showThumbnail", item.getImagePath());
+            pic.put("showUrl", MenuItemImageUrls.toPublic(item.getImagePath()));
+            pic.put("showThumbnail", MenuItemImageUrls.toPublic(item.getImagePath()));
             pics.add(pic);
         }
         goods.put("pics", pics);
@@ -80,8 +83,42 @@ public class ConsumerMenuService {
         goods.put("unit", item.getUnit() == null ? "份" : item.getUnit());
         goods.put("goodsTags", List.of());
         goods.put("goodsTagsItems", List.of());
+        goods.put("specGroups", toSpecGroups(item));
         goods.put("forceSelected", Boolean.TRUE.equals(item.getForceSelected()));
         return goods;
+    }
+
+    private List<Map<String, Object>> toSpecGroups(MenuItemEntity item) {
+        List<Map<String, Object>> specGroups = new ArrayList<>();
+        if (item.getGroups() == null) {
+            return specGroups;
+        }
+        for (MenuItemSpecGroupEntity group : item.getGroups()) {
+            Map<String, Object> groupVo = new java.util.HashMap<>();
+            groupVo.put("id", group.getId());
+            groupVo.put("name", group.getName());
+            groupVo.put("required", Boolean.TRUE.equals(group.getRequired()));
+            groupVo.put("multi", Boolean.TRUE.equals(group.getMulti()));
+
+            List<Map<String, Object>> options = new ArrayList<>();
+            if (group.getOptions() != null) {
+                for (MenuItemSpecOptionEntity option : group.getOptions()) {
+                    if (!"ENABLED".equals(option.getStatus())) {
+                        continue;
+                    }
+                    Map<String, Object> optionVo = new java.util.HashMap<>();
+                    optionVo.put("id", option.getId());
+                    optionVo.put("name", option.getName());
+                    BigDecimal adjust = option.getPriceAdjust() == null ? BigDecimal.ZERO : option.getPriceAdjust();
+                    optionVo.put("priceAdjust", adjust);
+                    optionVo.put("formatPriceAdjust", formatPrice(adjust));
+                    options.add(optionVo);
+                }
+            }
+            groupVo.put("options", options);
+            specGroups.add(groupVo);
+        }
+        return specGroups;
     }
 
     private String formatPrice(BigDecimal price) {

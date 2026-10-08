@@ -179,6 +179,7 @@ public class ConsumerController {
                 cartVO.put("formatPrice", item.getTotalPrice().toPlainString());
                 cartVO.put("goodsTagsItems", List.of());
                 cartVO.put("tags", item.getTagNames() == null ? "" : item.getTagNames());
+                cartVO.put("tagIds", item.getTagIds() == null ? "" : item.getTagIds());
                 carts.add(cartVO);
             }
 

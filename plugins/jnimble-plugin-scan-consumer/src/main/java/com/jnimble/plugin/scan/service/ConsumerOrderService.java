@@ -69,7 +69,7 @@ public class ConsumerOrderService {
 
             for (CartItemEntity cartItem : cartItems) {
                 orderService.addItem(orderId, cartItem.getMenuItemId(),
-                        cartItem.getItemName(), cartItem.getTagIds(),
+                        cartItem.getItemName(), cartItem.getTagNames(),
                         cartItem.getUnitPrice(), cartItem.getQuantity(),
                         cartItem.getRemark(), nextBatch);
             }
@@ -83,7 +83,7 @@ public class ConsumerOrderService {
 
             for (CartItemEntity cartItem : cartItems) {
                 orderService.addItem(orderId, cartItem.getMenuItemId(),
-                        cartItem.getItemName(), cartItem.getTagIds(),
+                        cartItem.getItemName(), cartItem.getTagNames(),
                         cartItem.getUnitPrice(), cartItem.getQuantity(),
                         cartItem.getRemark(), 0);
             }
