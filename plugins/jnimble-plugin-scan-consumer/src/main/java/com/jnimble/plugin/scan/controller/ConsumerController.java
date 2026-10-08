@@ -81,6 +81,42 @@ public class ConsumerController {
         }
     }
 
+    @GetMapping("/consumer/stores")
+    @ResponseBody
+    public Map<String, Object> listStores() {
+        try {
+            List<Map<String, Object>> stores = new ArrayList<>();
+            for (StoreEntity store : storeService.listStores()) {
+                stores.add(buildStoreInfo(store));
+            }
+            Map<String, Object> data = new HashMap<>();
+            data.put("stores", stores);
+            return ApiResult.success(data);
+        } catch (Exception e) {
+            return ApiResult.error(e.getMessage());
+        }
+    }
+
+    @GetMapping("/consumer/stores/{storeID}/tables")
+    @ResponseBody
+    public Map<String, Object> listTables(@PathVariable Long storeID) {
+        try {
+            List<Map<String, Object>> tables = new ArrayList<>();
+            for (ScanTableEntity table : tableService.listTables(storeID)) {
+                Map<String, Object> info = buildTableInfo(table);
+                info.put("area", table.getArea() == null ? "" : table.getArea());
+                info.put("seatCount", table.getSeatCount() == null ? 0 : table.getSeatCount());
+                info.put("status", table.getStatus() == null ? "" : table.getStatus());
+                tables.add(info);
+            }
+            Map<String, Object> data = new HashMap<>();
+            data.put("tables", tables);
+            return ApiResult.success(data);
+        } catch (Exception e) {
+            return ApiResult.error(e.getMessage());
+        }
+    }
+
     @PutMapping("/consumer/stores/{storeID}/latlng")
     @ResponseBody
     public Map<String, Object> updateStoreLatLng(@PathVariable Long storeID,

@@ -27,4 +27,14 @@ public class ScanTableService {
     public ScanTableEntity getTable(Long id) {
         return MapperUtils.getById(tableMapper, id, "Table not found: " + id);
     }
+
+    public List<ScanTableEntity> listTables(Long storeId) {
+        return MapperUtils.selectList(tableMapper, ScanTableEntity.class,
+                wrapper -> {
+                    if (storeId != null) {
+                        wrapper.eq("store_id", storeId);
+                    }
+                    wrapper.orderByAsc("id");
+                });
+    }
 }
