@@ -24,6 +24,7 @@
         <module>jnimble-plugin-printer-core</module>
         <module>jnimble-plugin-printer-feie</module>
         <module>jnimble-plugin-scan-consumer</module>
+        <module>jnimble-plugin-app-client</module>
     </modules>
 
     <!--
@@ -109,6 +110,11 @@
             <dependency>
                 <groupId>com.jnimble</groupId>
                 <artifactId>jnimble-plugin-scan-consumer</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.jnimble</groupId>
+                <artifactId>jnimble-plugin-app-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

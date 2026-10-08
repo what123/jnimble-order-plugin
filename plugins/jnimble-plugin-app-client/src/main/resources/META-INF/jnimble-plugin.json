@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "id": "app-client",
+  "name": "App Client Plugin",
+  "nameKey": "plugin.app-client.name",
+  "description": "REST API for the tablet/mobile app (staff operations and management)",
+  "descriptionKey": "plugin.app-client.description",
+  "version": "1.0.0",
+  "platformVersion": "0.1.x",
+  "author": "JNimble Team",
+  "bootClass": "com.jnimble.plugin.app.AppClientPluginBoot",
+  "spring": {
+    "configurationClass": "com.jnimble.plugin.app.AppClientPluginConfiguration"
+  },
+  "i18n": {
+    "basename": "i18n/messages"
+  },
+  "permissions": [],
+  "dependencies": [
+    {"pluginId": "menu-manager", "version": "1.x", "required": true},
+    {"pluginId": "order-core", "version": "1.x", "required": true},
+    {"pluginId": "order-table", "version": "1.x", "required": true},
+    {"pluginId": "printer-core", "version": "1.x", "required": true}
+  ],
+  "migration": {
+    "enabled": true,
+    "location": "classpath:db/migration/plugin/app-client",
+    "table": "flyway_schema_history_app_client",
+    "baselineOnMigrate": true,
+    "failOnError": true
+  }
+}
