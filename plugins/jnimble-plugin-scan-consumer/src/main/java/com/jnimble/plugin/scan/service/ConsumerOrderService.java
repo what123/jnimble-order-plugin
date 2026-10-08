@@ -179,6 +179,9 @@ public class ConsumerOrderService {
                     if (storeId != null) {
                         wrapper.eq("store_id", storeId);
                     }
+                    if (tableId != null) {
+                        wrapper.eq("table_id", tableId);
+                    }
                     wrapper.orderByDesc("updated_at").last("LIMIT 1");
                 });
 
