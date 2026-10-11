@@ -365,6 +365,7 @@ public class ConsumerOrderService {
             orderItem.put("orderNo", order.getOrderNo());
             orderItem.put("statusStr", getStatusStr(order.getStatus()));
             orderItem.put("formatFinalPrice", formatAmount(order.getFinalAmount()));
+            orderItem.put("payStatus", "SETTLED".equals(order.getStatus()) ? 2 : 1);
 
             List<Map<String, Object>> goodsList = new ArrayList<>();
             for (OrderItemEntity item : items) {
