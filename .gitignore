@@ -7,3 +7,4 @@ target/
 *.log
 .playwright-mcp/
 jnimble-framework/
+doc/

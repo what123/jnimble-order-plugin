@@ -36,27 +36,10 @@ jnimble-order-plugin/
 │   ├── pom.xml            # parent -> ../jnimble-framework,dependencyManagement 统一内部版本
 │   └── jnimble-plugin-*/  # 各业务插件
 ├── scripts/               # setup-framework.sh、build-plugins.sh
-├── doc/                   # 插件开发指南与相关文档
 └── jnimble-framework/     # 本地框架 checkout(被 gitignore,由 scripts/setup-framework.sh 生成)
 ```
 
 本仓库**只含插件代码**。开发时,`scripts/setup-framework.sh` 会把框架克隆到被忽略的 `jnimble-framework/` 并安装到本地 Maven 仓库,供插件编译使用。
-
-## 界面预览
-
-> 一套由插件组装出来的点餐系统(**JNimble 框架 + 本仓库插件**)。完整流程:开台 → 点菜 → 下单 → 后厨 → 结账。
-
-**🪑 收银点餐**(桌位图 + 点菜 · `order-table`)
-![收银点餐](doc/images/pos.png)
-
-**🧾 订单管理**(订单状态机 · `order-core`)
-![订单管理](doc/images/orders.png)
-
-**👨‍🍳 后厨制作**(后厨排队 · `order-core`)
-![后厨制作](doc/images/kitchen.png)
-
-**🍽️ 菜品管理**(分类 / 菜品 / 规格 · `menu-manager`)
-![菜品管理](doc/images/menu-items.png)
 
 ## 环境要求
 
@@ -78,7 +61,7 @@ cd jnimble-order-plugin
 starter **不依赖任何业务插件**,classpath 保持干净;插件以 JAR 方式从
 `jnimble-framework/jnimble-starter/data/plugins/` 目录安装,由 starter 的
 `PluginDirectoryInitializer`(启动扫描)与 `PluginDirectoryWatcher`(运行期热部署)负责加载。
-依赖方向始终是"插件 → 平台"。详见 [`doc/dev-workflow.md`](doc/dev-workflow.md)。
+依赖方向始终是"插件 → 平台"。
 
 首次启动前,拉取并安装 framework 到本地 Maven 仓库(starter 与插件的编译都依赖它):
 
@@ -156,7 +139,6 @@ jnimble-order-plugin/
 
 ## 开发约定
 
-- 插件开发完整指南见 [`doc/plugin-development.md`](doc/plugin-development.md)(目录结构、描述符字段、扩展点、迁移、i18n、依赖、常见坑、完整示例)
 - 插件模板路径必须以 `plugin/{pluginId}/` 开头
 - 权限码必须以 `{pluginId}.` 开头,否则不会同步到角色管理
 - 数据库变更只加新 `V{n}__*.sql` 脚本,不改旧脚本(Flyway checksum)

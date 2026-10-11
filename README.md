@@ -36,27 +36,10 @@ jnimble-order-plugin/
 │   ├── pom.xml            # parent -> ../jnimble-framework, dependencyManagement for inter-plugin versions
 │   └── jnimble-plugin-*/  # business plugins
 ├── scripts/               # setup-framework.sh, build-plugins.sh
-├── doc/                   # plugin development guide & docs
 └── jnimble-framework/     # local framework checkout (gitignored; created by scripts/setup-framework.sh)
 ```
 
 This repo contains **only plugin code**. For development, `scripts/setup-framework.sh` clones the framework into a gitignored `jnimble-framework/` directory and installs it to your local Maven repository, so plugins can compile against it.
-
-## Preview
-
-> A complete ordering / POS system assembled from plugins (**JNimble framework + the plugins in this repo**). Full flow: open table → take order → submit → kitchen → checkout.
-
-**🪑 POS / cashier** (table map + ordering · `order-table`)
-![POS ordering](doc/images/pos.png)
-
-**🧾 Order management** (order state machine · `order-core`)
-![Order management](doc/images/orders.png)
-
-**👨‍🍳 Kitchen** (kitchen queue · `order-core`)
-![Kitchen queue](doc/images/kitchen.png)
-
-**🍽️ Menu items** (categories / items / specs · `menu-manager`)
-![Menu items](doc/images/menu-items.png)
 
 ## Requirements
 
@@ -78,7 +61,6 @@ cd jnimble-order-plugin
 The starter does **not** depend on any business plugin — its classpath stays clean. Plugins are installed as JARs from
 `jnimble-framework/jnimble-starter/data/plugins/`, loaded by the starter's `PluginDirectoryInitializer` (startup scan)
 and `PluginDirectoryWatcher` (runtime hot-deploy). The dependency direction is always *plugin → platform*.
-See [`doc/dev-workflow.md`](doc/dev-workflow.md).
 
 Fetch & install the framework to local Maven (both the starter and the plugin builds depend on it):
 
@@ -159,7 +141,6 @@ jnimble-order-plugin/
 
 ## Development Conventions
 
-- Plugin development guide: [`doc/plugin-development.md`](doc/plugin-development.md) (layout, descriptor fields, extension points, migrations, i18n, dependencies, pitfalls, full example)
 - Plugin template paths MUST start with `plugin/{pluginId}/`
 - Permission codes MUST start with `{pluginId}.` — otherwise they won't sync to role management
 - For DB changes, only add new `V{n}__*.sql` scripts; never edit existing ones (Flyway checksum)
