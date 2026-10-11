@@ -177,4 +177,4 @@ jnimble-order-plugin/
 
 Apache 2.0 + Commercial dual-license. Open-source use must retain the copyright footer
 in the admin UI and login page. Copyright removal requires a commercial license from
-`178277164@qq.com`. See [NOTICE](NOTICE) and [LICENSE](LICENSE) for full terms.
+`2909110833@qq.com`. See [NOTICE](NOTICE) and [LICENSE](LICENSE) for full terms.

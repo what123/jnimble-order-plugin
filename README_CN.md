@@ -171,4 +171,4 @@ jnimble-order-plugin/
 
 ## 授权
 
-Apache 2.0 + 商业授权双重模式。开源使用必须保留后台 UI 与登录页的版权信息;去版权需联系 `178277164@qq.com` 购买商业授权。详见 [NOTICE](NOTICE) 与 [LICENSE](LICENSE)。
+Apache 2.0 + 商业授权双重模式。开源使用必须保留后台 UI 与登录页的版权信息;去版权需联系 `2909110833@qq.com` 购买商业授权。详见 [NOTICE](NOTICE) 与 [LICENSE](LICENSE)。
